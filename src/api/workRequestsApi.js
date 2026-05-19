@@ -25,3 +25,38 @@ export async function cancelWorkRequest(workRequestId) {
 
   return response.data;
 }
+
+export async function submitWorkRequest(workRequestId) {
+  const response = await apiClient.patch(
+    `/work-requests/${workRequestId}/submit`
+  );
+
+  return response.data;
+}
+
+export async function confirmWorkRequest(workRequestId) {
+  const response = await apiClient.patch(
+    `/work-requests/${workRequestId}/confirm`
+  );
+
+  return response.data;
+}
+
+export async function markWorkRequestAsChangeable(workRequestId) {
+  const response = await apiClient.patch(
+    `/work-requests/${workRequestId}/mark-changeable`
+  );
+
+  return response.data;
+}
+
+export async function rejectWorkRequest(workRequestId, reason = "") {
+  const response = await apiClient.patch(
+    `/work-requests/${workRequestId}/reject`,
+    {
+      reason,
+    }
+  );
+
+  return response.data;
+}

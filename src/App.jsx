@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import SimulationPage from "./pages/SimulationPage";
+import NominatorWorkRequestsPage from "./pages/nominator/NominatorWorkRequestsPage";
 import WorkersPage from "./pages/WorkersPage";
 import CompanyWorkRequestsPage from "./pages/company/CompanyWorkRequestsPage";
 import {
@@ -425,10 +426,7 @@ export default function App() {
       {currentPage === "workers" && <WorkersPage />}
 
       {currentPage === "workRequests" && (
-        <PlaceholderPage
-          title="Solicitudes de trabajo"
-          description="Panel de la empresa nominadora para revisar, confirmar, marcar como susceptible o rechazar solicitudes."
-        />
+        <NominatorWorkRequestsPage currentUser={currentUser} />
       )}
 
       {currentPage === "companies" && (
