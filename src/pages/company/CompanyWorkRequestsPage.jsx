@@ -209,6 +209,19 @@ function buildRequestPayloadFromLine({ form, line }) {
   };
 }
 
+function getShiftSortOrder(shiftCode) {
+  const order = {
+    "02_08": 1,
+    "08_14": 2,
+    "08_18": 3,
+    "14_20": 4,
+    "18_24": 5,
+    "20_02": 6,
+  };
+
+  return order[shiftCode] || 999;
+}
+
 function StatusBadge({ status }) {
   const baseClass =
     "inline-flex rounded-full px-3 py-1 text-xs font-black uppercase tracking-wide";
@@ -247,13 +260,6 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
 
   const sortedWorkRequests = useMemo(() => {
     return [...workRequests].sort((a, b) => {
-      const dateA = new Date(a.workDate).getTime();
-      const dateB = new Date(b.workDate).getTime();
-
-      if (dateA !== dateB) {
-        return dateB - dateA;
-      }
-
       const shipCompare = String(a.shipName || "").localeCompare(
         String(b.shipName || "")
       );
@@ -262,7 +268,22 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
         return shipCompare;
       }
 
-      return String(a.shiftCode || "").localeCompare(String(b.shiftCode || ""));
+      const berthCompare = String(a.berth?.name || "").localeCompare(
+        String(b.berth?.name || "")
+      );
+
+      if (berthCompare !== 0) {
+        return berthCompare;
+      }
+
+      const dateA = new Date(a.workDate).getTime();
+      const dateB = new Date(b.workDate).getTime();
+
+      if (dateA !== dateB) {
+        return dateA - dateB;
+      }
+
+      return getShiftSortOrder(a.shiftCode) - getShiftSortOrder(b.shiftCode);
     });
   }, [workRequests]);
 
@@ -273,7 +294,6 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
       const key = [
         workRequest.shipName || "SIN_BARCO",
         workRequest.berth?.name || "SIN_MUELLE",
-        formatDate(workRequest.workDate),
       ].join("|");
 
       let group = groups.find((item) => item.key === key);
@@ -283,7 +303,7 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
           key,
           shipName: workRequest.shipName || "Sin barco",
           berthName: workRequest.berth?.name || "-",
-          dateLabel: formatDate(workRequest.workDate),
+          berthCode: workRequest.berth?.code || "-",
           items: [],
         };
 
@@ -293,7 +313,23 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
       group.items.push(workRequest);
     }
 
-    return groups;
+    return groups.map((group) => {
+      const dates = group.items
+        .map((item) => formatDate(item.workDate))
+        .filter((date, index, array) => array.indexOf(date) === index);
+
+      const statusSummary = group.items.reduce((acc, item) => {
+        const status = item.status || "SIN_ESTADO";
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+      }, {});
+
+      return {
+        ...group,
+        dates,
+        statusSummary,
+      };
+    });
   }, [sortedWorkRequests]);
 
   async function loadWorkRequests() {
@@ -883,12 +919,28 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
                         {group.shipName}
                       </div>
                       <div className="text-sm text-slate-500">
-                        {group.berthName} · {group.dateLabel}
+                        {group.berthName} · {group.berthCode}
+                      </div>
+                      <div className="mt-1 text-xs font-bold text-slate-500">
+                        Fechas: {group.dates.join(", ")}
                       </div>
                     </div>
 
-                    <div className="rounded-full bg-white px-3 py-1 text-sm font-black text-slate-700 shadow-sm">
-                      {group.items.length} solicitud/es
+                    <div className="flex flex-wrap items-center gap-2">
+                      {Object.entries(group.statusSummary).map(
+                        ([status, count]) => (
+                          <div
+                            key={status}
+                            className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-700 shadow-sm"
+                          >
+                            {getStatusLabel(status)}: {count}
+                          </div>
+                        )
+                      )}
+
+                      <div className="rounded-full bg-slate-900 px-3 py-1 text-sm font-black text-white shadow-sm">
+                        {group.items.length} solicitud/es
+                      </div>
                     </div>
                   </div>
 
@@ -899,7 +951,6 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
                           <th className="px-5 py-4">Fecha</th>
                           <th className="px-5 py-4">Turno</th>
                           <th className="px-5 py-4">Trabajo</th>
-                          <th className="px-5 py-4">Muelle</th>
                           <th className="px-5 py-4">Estado</th>
                           <th className="px-5 py-4">Observaciones</th>
                           <th className="px-5 py-4 text-right">Acciones</th>
@@ -930,10 +981,6 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
                                 <div className="text-xs text-slate-500">
                                   {workRequest.taskCode}
                                 </div>
-                              </td>
-
-                              <td className="px-5 py-4 text-sm text-slate-700">
-                                {workRequest.berth?.name || "-"}
                               </td>
 
                               <td className="px-5 py-4">
