@@ -87,25 +87,54 @@ const QUICK_TEMPLATES = [
       { positionCode: "MAFI", quantity: 3, notes: "" },
     ],
   },
+  {
+    id: "GRANEL",
+    name: "Granel básico",
+    taskCode: "GRANEL",
+    taskName: "Granel",
+    requiredPositions: [
+      { positionCode: "CAPATAZ", quantity: 1, notes: "" },
+      { positionCode: "GRUA", quantity: 1, notes: "" },
+      { positionCode: "AYUDANTE_GRUA", quantity: 1, notes: "" },
+      { positionCode: "PALA", quantity: 1, notes: "" },
+      { positionCode: "BORDO", quantity: 1, notes: "" },
+    ],
+  },
 ];
+
+const createEmptyPlanLine = ({
+  workDate = "",
+  shiftCode = "14_20",
+  templateId = "CONT_2",
+} = {}) => {
+  return {
+    id: crypto.randomUUID(),
+    workDate,
+    shiftCode,
+    templateId,
+    isChangeable: false,
+    observations: "",
+  };
+};
 
 const DEFAULT_FORM = {
   shipName: "",
-  workDate: "",
-  shiftCode: "14_20",
-  taskCode: "CONT",
-  taskName: "Contenedores",
   berthCode: "M9",
   berthName: "Muelle 9",
   berthOrder: 2,
-  observations: "",
-  templateId: "CONT_2",
-  requiredPositions: QUICK_TEMPLATES[1].requiredPositions,
-  isChangeable: false,
+  generalObservations: "",
+  lines: [
+    createEmptyPlanLine({
+      shiftCode: "14_20",
+      templateId: "CONT_2",
+    }),
+  ],
 };
 
 function formatDate(dateValue) {
-  if (!dateValue) return "-";
+  if (!dateValue) {
+    return "-";
+  }
 
   const date = new Date(dateValue);
 
@@ -128,16 +157,43 @@ function canShiftBeChangeable(shiftCode) {
   return ["08_14", "08_18"].includes(shiftCode);
 }
 
-function buildRequestPayload(form) {
+function getTemplateById(templateId) {
+  return (
+    QUICK_TEMPLATES.find((template) => template.id === templateId) ||
+    QUICK_TEMPLATES[1]
+  );
+}
+
+function cloneRequiredPositions(requiredPositions) {
+  return (requiredPositions || []).map((position) => ({
+    positionCode: position.positionCode,
+    quantity: Number(position.quantity || 0),
+    notes: position.notes || "",
+  }));
+}
+
+function buildRequestPayloadFromLine({ form, line }) {
+  const template = getTemplateById(line.templateId);
+
   const shouldBeChangeable =
-    form.isChangeable && canShiftBeChangeable(form.shiftCode);
+    line.isChangeable && canShiftBeChangeable(line.shiftCode);
+
+  const observationsParts = [];
+
+  if (form.generalObservations?.trim()) {
+    observationsParts.push(form.generalObservations.trim());
+  }
+
+  if (line.observations?.trim()) {
+    observationsParts.push(line.observations.trim());
+  }
 
   return {
     shipName: form.shipName,
-    workDate: form.workDate,
-    shiftCode: form.shiftCode,
-    taskCode: form.taskCode,
-    taskName: form.taskName,
+    workDate: line.workDate,
+    shiftCode: line.shiftCode,
+    taskCode: template.taskCode,
+    taskName: template.taskName,
     berth: {
       code: form.berthCode,
       name: form.berthName,
@@ -146,23 +202,10 @@ function buildRequestPayload(form) {
     },
     shipContinuity: "NEW_SHIP",
     keepPreviousWorkersIfPossible: false,
-
-    /**
-     * Si la empresa marca susceptible y el turno lo permite,
-     * la solicitud nace como CHANGEABLE.
-     *
-     * Esto permite al motor nombrarla al final.
-     */
     status: shouldBeChangeable ? "CHANGEABLE" : "SUBMITTED",
-
-    /**
-     * Aunque sea CHANGEABLE, de momento no la hacemos visible a trabajadores
-     * desde el portal de empresa. La visibilidad real la controlará nominación.
-     */
     visibleToWorkers: false,
-
-    requiredPositions: form.requiredPositions,
-    observations: form.observations,
+    requiredPositions: cloneRequiredPositions(template.requiredPositions),
+    observations: observationsParts.join(" | "),
   };
 }
 
@@ -181,7 +224,11 @@ function StatusBadge({ status }) {
       ? "bg-slate-200 text-slate-600"
       : "bg-blue-100 text-blue-800";
 
-  return <span className={`${baseClass} ${statusClass}`}>{getStatusLabel(status)}</span>;
+  return (
+    <span className={`${baseClass} ${statusClass}`}>
+      {getStatusLabel(status)}
+    </span>
+  );
 }
 
 export default function CompanyWorkRequestsPage({ currentUser }) {
@@ -203,11 +250,51 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
       const dateA = new Date(a.workDate).getTime();
       const dateB = new Date(b.workDate).getTime();
 
-      if (dateA !== dateB) return dateB - dateA;
+      if (dateA !== dateB) {
+        return dateB - dateA;
+      }
+
+      const shipCompare = String(a.shipName || "").localeCompare(
+        String(b.shipName || "")
+      );
+
+      if (shipCompare !== 0) {
+        return shipCompare;
+      }
 
       return String(a.shiftCode || "").localeCompare(String(b.shiftCode || ""));
     });
   }, [workRequests]);
+
+  const groupedWorkRequests = useMemo(() => {
+    const groups = [];
+
+    for (const workRequest of sortedWorkRequests) {
+      const key = [
+        workRequest.shipName || "SIN_BARCO",
+        workRequest.berth?.name || "SIN_MUELLE",
+        formatDate(workRequest.workDate),
+      ].join("|");
+
+      let group = groups.find((item) => item.key === key);
+
+      if (!group) {
+        group = {
+          key,
+          shipName: workRequest.shipName || "Sin barco",
+          berthName: workRequest.berth?.name || "-",
+          dateLabel: formatDate(workRequest.workDate),
+          items: [],
+        };
+
+        groups.push(group);
+      }
+
+      group.items.push(workRequest);
+    }
+
+    return groups;
+  }, [sortedWorkRequests]);
 
   async function loadWorkRequests() {
     try {
@@ -236,39 +323,69 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
     loadWorkRequests();
   }, []);
 
-  function handleTemplateChange(templateId) {
-    const template = QUICK_TEMPLATES.find((item) => item.id === templateId);
-
-    if (!template) {
-      return;
-    }
-
+  function updateFormField(fieldName, value) {
     setForm((currentForm) => ({
       ...currentForm,
-      templateId,
-      taskCode: template.taskCode,
-      taskName: template.taskName,
-      requiredPositions: template.requiredPositions,
+      [fieldName]: value,
     }));
   }
 
-  function updateRequiredPositionQuantity(positionCode, quantity) {
+  function updatePlanLine(lineId, changes) {
     setForm((currentForm) => ({
       ...currentForm,
-      requiredPositions: currentForm.requiredPositions.map((position) => {
-        if (position.positionCode !== positionCode) {
-          return position;
+      lines: currentForm.lines.map((line) => {
+        if (line.id !== lineId) {
+          return line;
         }
 
-        return {
-          ...position,
-          quantity: Number(quantity || 0),
+        const nextLine = {
+          ...line,
+          ...changes,
         };
+
+        if (
+          Object.prototype.hasOwnProperty.call(changes, "shiftCode") &&
+          !canShiftBeChangeable(changes.shiftCode)
+        ) {
+          nextLine.isChangeable = false;
+        }
+
+        return nextLine;
       }),
     }));
   }
 
-  async function handleCreateWorkRequest(event) {
+  function addPlanLine() {
+    setForm((currentForm) => {
+      const lastLine = currentForm.lines[currentForm.lines.length - 1];
+
+      const nextLine = createEmptyPlanLine({
+        workDate: lastLine?.workDate || "",
+        shiftCode: lastLine?.shiftCode || "14_20",
+        templateId: lastLine?.templateId || "CONT_2",
+      });
+
+      return {
+        ...currentForm,
+        lines: [...currentForm.lines, nextLine],
+      };
+    });
+  }
+
+  function removePlanLine(lineId) {
+    setForm((currentForm) => {
+      if (currentForm.lines.length <= 1) {
+        return currentForm;
+      }
+
+      return {
+        ...currentForm,
+        lines: currentForm.lines.filter((line) => line.id !== lineId),
+      };
+    });
+  }
+
+  async function handleCreateWorkRequests(event) {
     event.preventDefault();
 
     try {
@@ -280,28 +397,69 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
         throw new Error("Debes indicar el nombre del barco");
       }
 
-      if (!form.workDate) {
-        throw new Error("Debes indicar la fecha de trabajo");
+      if (!form.berthName.trim()) {
+        throw new Error("Debes indicar el muelle");
       }
 
-      const payload = buildRequestPayload(form);
-
-      const result = await createWorkRequest(payload);
-
-      if (!result.success) {
-        throw new Error(result.message || "No se pudo crear la solicitud");
+      if (!Array.isArray(form.lines) || form.lines.length === 0) {
+        throw new Error("Debes añadir al menos una línea de trabajo");
       }
 
-      setSuccessMessage("Solicitud creada correctamente");
+      for (const line of form.lines) {
+        if (!line.workDate) {
+          throw new Error("Todas las líneas deben tener fecha de trabajo");
+        }
+
+        if (!line.shiftCode) {
+          throw new Error("Todas las líneas deben tener turno");
+        }
+
+        if (!line.templateId) {
+          throw new Error("Todas las líneas deben tener plantilla");
+        }
+      }
+
+      const createdResults = [];
+
+      for (const line of form.lines) {
+        const payload = buildRequestPayloadFromLine({
+          form,
+          line,
+        });
+
+        const result = await createWorkRequest(payload);
+
+        if (!result.success) {
+          throw new Error(
+            result.message ||
+              `No se pudo crear la solicitud ${line.workDate} ${line.shiftCode}`
+          );
+        }
+
+        createdResults.push(result.data);
+      }
+
+      setSuccessMessage(
+        `Planificación creada correctamente: ${createdResults.length} solicitud/es enviadas`
+      );
+
       setShowForm(false);
-      setForm(DEFAULT_FORM);
+      setForm({
+        ...DEFAULT_FORM,
+        lines: [
+          createEmptyPlanLine({
+            shiftCode: "14_20",
+            templateId: "CONT_2",
+          }),
+        ],
+      });
 
       await loadWorkRequests();
     } catch (error) {
       setErrorMessage(
         error.response?.data?.message ||
           error.message ||
-          "Error creando solicitud"
+          "Error creando planificación"
       );
     } finally {
       setSaving(false);
@@ -344,7 +502,7 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
 
   async function handleCancelRequest(workRequest) {
     const confirmed = window.confirm(
-      `¿Seguro que quieres cancelar la solicitud de ${workRequest.shipName}?`
+      `¿Seguro que quieres cancelar la solicitud de ${workRequest.shipName} ${workRequest.shiftCode}?`
     );
 
     if (!confirmed) {
@@ -388,8 +546,9 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
               Mis solicitudes de trabajo
             </h1>
             <p className="mt-2 text-slate-600">
-              {currentUser?.company?.name || "Empresa"} puede crear, revisar y
-              modificar sus solicitudes mientras no estén confirmadas.
+              {currentUser?.company?.name || "Empresa"} puede crear una
+              planificación por barco y añadir varios turnos de trabajo de una
+              sola vez.
             </p>
           </div>
 
@@ -398,7 +557,7 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
             onClick={() => setShowForm((value) => !value)}
             className="rounded-2xl bg-slate-950 px-5 py-3 font-black text-white shadow hover:bg-slate-700"
           >
-            {showForm ? "Cerrar formulario" : "Nueva solicitud"}
+            {showForm ? "Cerrar planificación" : "Nueva planificación por barco"}
           </button>
         </div>
 
@@ -416,44 +575,28 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
 
         {showForm && (
           <form
-            onSubmit={handleCreateWorkRequest}
+            onSubmit={handleCreateWorkRequests}
             className="mb-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
           >
-            <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-black text-slate-900">
-                  Nueva solicitud rápida
-                </h2>
-                <p className="text-sm text-slate-500">
-                  Elige una plantilla y ajusta cantidades si hace falta.
-                </p>
-              </div>
-
-              <select
-                value={form.templateId}
-                onChange={(event) => handleTemplateChange(event.target.value)}
-                className="rounded-2xl border border-slate-300 px-4 py-3 font-bold text-slate-900"
-              >
-                {QUICK_TEMPLATES.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </select>
+            <div className="mb-6">
+              <h2 className="text-xl font-black text-slate-900">
+                Nueva planificación por barco
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Introduce el barco una sola vez y añade tantas líneas de trabajo
+                como necesites: 14_20, 20_02, 02_08, 08_14, etc.
+              </p>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <label className="block">
+            <div className="grid gap-4 md:grid-cols-4">
+              <label className="block md:col-span-2">
                 <span className="mb-2 block text-sm font-bold text-slate-700">
                   Barco
                 </span>
                 <input
                   value={form.shipName}
                   onChange={(event) =>
-                    setForm((currentForm) => ({
-                      ...currentForm,
-                      shipName: event.target.value,
-                    }))
+                    updateFormField("shipName", event.target.value)
                   }
                   className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900"
                   placeholder="MSC..."
@@ -462,96 +605,15 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
 
               <label className="block">
                 <span className="mb-2 block text-sm font-bold text-slate-700">
-                  Fecha
-                </span>
-                <input
-                  type="date"
-                  value={form.workDate}
-                  onChange={(event) =>
-                    setForm((currentForm) => ({
-                      ...currentForm,
-                      workDate: event.target.value,
-                    }))
-                  }
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900"
-                />
-              </label>
-
-              <label className="block">
-                <span className="mb-2 block text-sm font-bold text-slate-700">
-                  Turno
-                </span>
-                <select
-                    value={form.shiftCode}
-                    onChange={(event) => {
-                        const nextShiftCode = event.target.value;
-
-                        setForm((currentForm) => ({
-                            ...currentForm,
-                            shiftCode: nextShiftCode,
-                            isChangeable: canShiftBeChangeable(nextShiftCode)
-                                ? currentForm.isChangeable
-                                : false,
-                        }));
-                    }}
-                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900"
-                >
-                  {SHIFT_OPTIONS.map((shift) => (
-                    <option key={shift.value} value={shift.value}>
-                      {shift.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                <label className="flex items-start gap-3">
-                    <input
-                        type="checkbox"
-                        checked={form.isChangeable}
-                        disabled={!canShiftBeChangeable(form.shiftCode)}
-                        onChange={(event) =>
-                            setForm((currentForm) => ({
-                                ...currentForm,
-                                isChangeable: event.target.checked,
-                            }))
-                        }
-                        className="mt-1 h-5 w-5"
-                    />
-
-                    <div>
-                        <div className="font-black text-amber-900">
-                            Solicitud susceptible de cambio
-                        </div>
-
-                        <p className="mt-1 text-sm text-amber-800">
-                            Úsalo para trabajos de mañana que pueden confirmarse, modificarse o
-                            anularse más tarde según avance el barco. Normalmente aplica a 08_14 y
-                            08_18.
-                        </p>
-
-                        {!canShiftBeChangeable(form.shiftCode) && (
-                            <p className="mt-2 text-sm font-bold text-amber-900">
-                                Este turno no admite susceptible de cambio desde el portal de empresa.
-                            </p>
-                        )}
-                    </div>
-                </label>
-            </div>      
-            <div className="mt-4 grid gap-4 md:grid-cols-3">
-              <label className="block">
-                <span className="mb-2 block text-sm font-bold text-slate-700">
                   Muelle
                 </span>
                 <input
                   value={form.berthName}
                   onChange={(event) =>
-                    setForm((currentForm) => ({
-                      ...currentForm,
-                      berthName: event.target.value,
-                    }))
+                    updateFormField("berthName", event.target.value)
                   }
                   className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900"
+                  placeholder="Muelle 9"
                 />
               </label>
 
@@ -562,15 +624,15 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
                 <input
                   value={form.berthCode}
                   onChange={(event) =>
-                    setForm((currentForm) => ({
-                      ...currentForm,
-                      berthCode: event.target.value,
-                    }))
+                    updateFormField("berthCode", event.target.value)
                   }
                   className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900"
+                  placeholder="M9"
                 />
               </label>
+            </div>
 
+            <div className="mt-4 grid gap-4 md:grid-cols-4">
               <label className="block">
                 <span className="mb-2 block text-sm font-bold text-slate-700">
                   Orden muelle
@@ -579,63 +641,207 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
                   type="number"
                   value={form.berthOrder}
                   onChange={(event) =>
-                    setForm((currentForm) => ({
-                      ...currentForm,
-                      berthOrder: event.target.value,
-                    }))
+                    updateFormField("berthOrder", event.target.value)
                   }
                   className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900"
                 />
               </label>
+
+              <label className="block md:col-span-3">
+                <span className="mb-2 block text-sm font-bold text-slate-700">
+                  Observaciones generales
+                </span>
+                <input
+                  value={form.generalObservations}
+                  onChange={(event) =>
+                    updateFormField("generalObservations", event.target.value)
+                  }
+                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900"
+                  placeholder="Observaciones comunes para este barco..."
+                />
+              </label>
             </div>
 
-            <div className="mt-6 rounded-2xl bg-slate-50 p-4">
-              <h3 className="mb-3 font-black text-slate-900">
-                Puestos solicitados
-              </h3>
+            <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-5">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">
+                    Líneas de trabajo
+                  </h3>
+                  <p className="text-sm text-slate-500">
+                    Cada línea creará una solicitud independiente para el mismo
+                    barco.
+                  </p>
+                </div>
 
-              <div className="grid gap-3 md:grid-cols-3">
-                {form.requiredPositions.map((position) => (
-                  <label
-                    key={position.positionCode}
-                    className="flex items-center justify-between gap-3 rounded-2xl bg-white p-3"
-                  >
-                    <span className="text-sm font-black text-slate-700">
-                      {position.positionCode}
-                    </span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={position.quantity}
-                      onChange={(event) =>
-                        updateRequiredPositionQuantity(
-                          position.positionCode,
-                          event.target.value
-                        )
-                      }
-                      className="w-20 rounded-xl border border-slate-300 px-3 py-2 text-right font-black text-slate-900"
-                    />
-                  </label>
-                ))}
+                <button
+                  type="button"
+                  onClick={addPlanLine}
+                  className="rounded-2xl bg-white px-4 py-2 text-sm font-black text-slate-800 shadow-sm hover:bg-slate-100"
+                >
+                  + Añadir línea
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {form.lines.map((line, index) => {
+                  const template = getTemplateById(line.templateId);
+                  const shiftAllowsChangeable = canShiftBeChangeable(
+                    line.shiftCode
+                  );
+
+                  return (
+                    <div
+                      key={line.id}
+                      className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
+                    >
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <div className="font-black text-slate-900">
+                          Línea {index + 1}
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={form.lines.length <= 1}
+                          onClick={() => removePlanLine(line.id)}
+                          className="rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-4">
+                        <label className="block">
+                          <span className="mb-2 block text-sm font-bold text-slate-700">
+                            Fecha
+                          </span>
+                          <input
+                            type="date"
+                            value={line.workDate}
+                            onChange={(event) =>
+                              updatePlanLine(line.id, {
+                                workDate: event.target.value,
+                              })
+                            }
+                            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900"
+                          />
+                        </label>
+
+                        <label className="block">
+                          <span className="mb-2 block text-sm font-bold text-slate-700">
+                            Turno
+                          </span>
+                          <select
+                            value={line.shiftCode}
+                            onChange={(event) =>
+                              updatePlanLine(line.id, {
+                                shiftCode: event.target.value,
+                              })
+                            }
+                            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900"
+                          >
+                            {SHIFT_OPTIONS.map((shift) => (
+                              <option key={shift.value} value={shift.value}>
+                                {shift.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label className="block md:col-span-2">
+                          <span className="mb-2 block text-sm font-bold text-slate-700">
+                            Plantilla
+                          </span>
+                          <select
+                            value={line.templateId}
+                            onChange={(event) =>
+                              updatePlanLine(line.id, {
+                                templateId: event.target.value,
+                              })
+                            }
+                            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900"
+                          >
+                            {QUICK_TEMPLATES.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+
+                      <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                        <label className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={line.isChangeable}
+                            disabled={!shiftAllowsChangeable}
+                            onChange={(event) =>
+                              updatePlanLine(line.id, {
+                                isChangeable: event.target.checked,
+                              })
+                            }
+                            className="mt-1 h-5 w-5"
+                          />
+
+                          <div>
+                            <div className="font-black text-amber-900">
+                              Susceptible de cambio
+                            </div>
+
+                            <p className="mt-1 text-sm text-amber-800">
+                              Normalmente solo aplica a trabajos de mañana:
+                              08_14 y 08_18. Se nombrarán al final y podrán
+                              gestionarse según avance el barco.
+                            </p>
+
+                            {!shiftAllowsChangeable && (
+                              <p className="mt-2 text-sm font-bold text-amber-900">
+                                Este turno no admite susceptible de cambio desde
+                                el portal de empresa.
+                              </p>
+                            )}
+                          </div>
+                        </label>
+                      </div>
+
+                      <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+                        <div className="mb-2 text-sm font-black text-slate-700">
+                          Puestos de la plantilla
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          {template.requiredPositions.map((position) => (
+                            <span
+                              key={position.positionCode}
+                              className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-700 shadow-sm"
+                            >
+                              {position.positionCode}: {position.quantity}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <label className="mt-4 block">
+                        <span className="mb-2 block text-sm font-bold text-slate-700">
+                          Observaciones de esta línea
+                        </span>
+                        <input
+                          value={line.observations}
+                          onChange={(event) =>
+                            updatePlanLine(line.id, {
+                              observations: event.target.value,
+                            })
+                          }
+                          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900"
+                          placeholder="Comentario específico para este turno..."
+                        />
+                      </label>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-
-            <label className="mt-5 block">
-              <span className="mb-2 block text-sm font-bold text-slate-700">
-                Observaciones
-              </span>
-              <textarea
-                value={form.observations}
-                onChange={(event) =>
-                  setForm((currentForm) => ({
-                    ...currentForm,
-                    observations: event.target.value,
-                  }))
-                }
-                className="min-h-24 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900"
-                placeholder="Comentarios para nombramiento..."
-              />
-            </label>
 
             <div className="mt-6 flex justify-end">
               <button
@@ -643,7 +849,7 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
                 disabled={saving}
                 className="rounded-2xl bg-slate-950 px-6 py-3 font-black text-white hover:bg-slate-700 disabled:opacity-60"
               >
-                {saving ? "Guardando..." : "Crear solicitud"}
+                {saving ? "Creando..." : "Crear planificación"}
               </button>
             </div>
           </form>
@@ -665,84 +871,117 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
               Todavía no hay solicitudes vinculadas a esta empresa.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[920px] border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 text-left text-xs font-black uppercase tracking-wide text-slate-500">
-                    <th className="px-5 py-4">Fecha</th>
-                    <th className="px-5 py-4">Turno</th>
-                    <th className="px-5 py-4">Barco</th>
-                    <th className="px-5 py-4">Trabajo</th>
-                    <th className="px-5 py-4">Muelle</th>
-                    <th className="px-5 py-4">Estado</th>
-                    <th className="px-5 py-4 text-right">Acciones</th>
-                  </tr>
-                </thead>
+            <div className="space-y-5 p-5">
+              {groupedWorkRequests.map((group) => (
+                <div
+                  key={group.key}
+                  className="overflow-hidden rounded-3xl border border-slate-200 bg-white"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-5 py-4">
+                    <div>
+                      <div className="text-lg font-black text-slate-900">
+                        {group.shipName}
+                      </div>
+                      <div className="text-sm text-slate-500">
+                        {group.berthName} · {group.dateLabel}
+                      </div>
+                    </div>
 
-                <tbody>
-                  {sortedWorkRequests.map((workRequest) => {
-                    const editable = canCompanyEditRequest(workRequest);
+                    <div className="rounded-full bg-white px-3 py-1 text-sm font-black text-slate-700 shadow-sm">
+                      {group.items.length} solicitud/es
+                    </div>
+                  </div>
 
-                    return (
-                      <tr
-                        key={workRequest._id}
-                        className="border-t border-slate-100"
-                      >
-                        <td className="px-5 py-4 text-sm font-bold text-slate-800">
-                          {formatDate(workRequest.workDate)}
-                        </td>
-                        <td className="px-5 py-4 text-sm font-bold text-slate-800">
-                          {workRequest.shiftCode}
-                        </td>
-                        <td className="px-5 py-4">
-                          <div className="font-black text-slate-900">
-                            {workRequest.shipName}
-                          </div>
-                          <div className="text-xs text-slate-500">
-                            {workRequest.requestingCompany?.name ||
-                              workRequest.requestingCompanyName}
-                          </div>
-                        </td>
-                        <td className="px-5 py-4 text-sm text-slate-700">
-                          {workRequest.taskName}
-                        </td>
-                        <td className="px-5 py-4 text-sm text-slate-700">
-                          {workRequest.berth?.name || "-"}
-                        </td>
-                        <td className="px-5 py-4">
-                          <StatusBadge status={workRequest.status} />
-                        </td>
-                        <td className="px-5 py-4">
-                          <div className="flex justify-end gap-2">
-                            <button
-                              type="button"
-                              disabled={!editable}
-                              onClick={() => {
-                                setEditingRequest(workRequest);
-                                setEditObservations(
-                                  workRequest.observations || ""
-                                );
-                              }}
-                              className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[920px] border-collapse">
+                      <thead>
+                        <tr className="bg-white text-left text-xs font-black uppercase tracking-wide text-slate-500">
+                          <th className="px-5 py-4">Fecha</th>
+                          <th className="px-5 py-4">Turno</th>
+                          <th className="px-5 py-4">Trabajo</th>
+                          <th className="px-5 py-4">Muelle</th>
+                          <th className="px-5 py-4">Estado</th>
+                          <th className="px-5 py-4">Observaciones</th>
+                          <th className="px-5 py-4 text-right">Acciones</th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {group.items.map((workRequest) => {
+                          const editable = canCompanyEditRequest(workRequest);
+
+                          return (
+                            <tr
+                              key={workRequest._id}
+                              className="border-t border-slate-100"
                             >
-                              Editar
-                            </button>
+                              <td className="px-5 py-4 text-sm font-bold text-slate-800">
+                                {formatDate(workRequest.workDate)}
+                              </td>
 
-                            <button
-                              type="button"
-                              disabled={!editable}
-                              onClick={() => handleCancelRequest(workRequest)}
-                              className="rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                              Cancelar
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                              <td className="px-5 py-4 text-sm font-black text-slate-800">
+                                {workRequest.shiftCode}
+                              </td>
+
+                              <td className="px-5 py-4">
+                                <div className="font-black text-slate-900">
+                                  {workRequest.taskName}
+                                </div>
+                                <div className="text-xs text-slate-500">
+                                  {workRequest.taskCode}
+                                </div>
+                              </td>
+
+                              <td className="px-5 py-4 text-sm text-slate-700">
+                                {workRequest.berth?.name || "-"}
+                              </td>
+
+                              <td className="px-5 py-4">
+                                <StatusBadge status={workRequest.status} />
+                              </td>
+
+                              <td className="max-w-xs px-5 py-4 text-sm text-slate-600">
+                                <div className="line-clamp-2">
+                                  {workRequest.observations || "-"}
+                                </div>
+                              </td>
+
+                              <td className="px-5 py-4">
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={!editable}
+                                    onClick={() => {
+                                      setEditingRequest(workRequest);
+                                      setEditObservations(
+                                        workRequest.observations || ""
+                                      );
+                                    }}
+                                    className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
+                                  >
+                                    Editar
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    disabled={!editable}
+                                    onClick={() =>
+                                      handleCancelRequest(workRequest)
+                                    }
+                                    className="rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -753,6 +992,7 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
               <h2 className="text-xl font-black text-slate-900">
                 Editar solicitud
               </h2>
+
               <p className="mt-1 text-sm text-slate-500">
                 {editingRequest.shipName} · {formatDate(editingRequest.workDate)} ·{" "}
                 {editingRequest.shiftCode}
