@@ -8,6 +8,14 @@ export async function getWorkRequests(params = {}) {
   return response.data;
 }
 
+export async function getNominationPreview(params = {}) {
+  const response = await apiClient.get("/work-requests/nomination-preview", {
+    params,
+  });
+
+  return response.data;
+}
+
 export async function createWorkRequest(data) {
   const response = await apiClient.post("/work-requests", data);
 
