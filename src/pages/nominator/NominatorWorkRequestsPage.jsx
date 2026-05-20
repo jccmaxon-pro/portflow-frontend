@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { simulateAppointmentBlock } from "../../api/appointmentSimulationApi";
+import NominationVisualResult from "../../components/nomination/NominationVisualResult";
 import {
   cancelWorkRequest,
   confirmWorkRequest,
@@ -213,6 +215,278 @@ function RequestMiniTable({ title, requests, emptyText }) {
   );
 }
 
+function SimulationSummaryCard({ label, value, tone = "slate" }) {
+  const toneClass =
+    tone === "green"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      : tone === "red"
+      ? "border-red-200 bg-red-50 text-red-800"
+      : tone === "amber"
+      ? "border-amber-200 bg-amber-50 text-amber-800"
+      : "border-slate-200 bg-white text-slate-900";
+
+  return (
+    <div className={`rounded-3xl border p-5 shadow-sm ${toneClass}`}>
+      <p className="text-xs font-black uppercase tracking-wide opacity-70">
+        {label}
+      </p>
+      <p className="mt-2 text-3xl font-black">{value ?? 0}</p>
+    </div>
+  );
+}
+
+function AppointmentSimulationResult({ simulationResult }) {
+  if (!simulationResult) {
+    return null;
+  }
+
+  const summary = simulationResult.summary || {};
+  const assignments = simulationResult.assignments || [];
+  const uncoveredPositions = simulationResult.uncoveredPositions || [];
+  const byPosition = summary.byPosition || {};
+
+  const groupedAssignments = assignments.reduce((acc, assignment) => {
+    const key = [
+      assignment.nominationWindowLabel || assignment.nominationWindowCode || "Sin ventana",
+      assignment.shiftCode || "Sin turno",
+      assignment.shipName || "Sin barco",
+      assignment.berth?.name || "Sin muelle",
+    ].join("|");
+
+    if (!acc[key]) {
+      acc[key] = {
+        key,
+        windowLabel:
+          assignment.nominationWindowLabel ||
+          assignment.nominationWindowCode ||
+          "Sin ventana",
+        shiftCode: assignment.shiftCode || "-",
+        shipName: assignment.shipName || "-",
+        berthName: assignment.berth?.name || "-",
+        items: [],
+      };
+    }
+
+    acc[key].items.push(assignment);
+
+    return acc;
+  }, {});
+
+  const groupedList = Object.values(groupedAssignments);
+
+  return (
+    <div className="mt-6 space-y-5">
+      <div className="rounded-3xl bg-slate-950 p-6 text-white shadow-sm">
+        <p className="text-sm font-black uppercase tracking-wide text-slate-400">
+          Resultado del nombramiento
+        </p>
+        <h3 className="mt-1 text-2xl font-black">
+          Simulación generada
+        </h3>
+        <p className="mt-2 text-sm text-slate-300">
+          Estrategia: {summary.strategyName || summary.strategyCode || "-"}
+        </p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <SimulationSummaryCard
+          label="Puestos a cubrir"
+          value={summary.positionsToCover}
+        />
+
+        <SimulationSummaryCard
+          label="Asignados"
+          value={summary.assignedPositions}
+          tone="green"
+        />
+
+        <SimulationSummaryCard
+          label="Sin cubrir"
+          value={summary.uncoveredPositions}
+          tone={summary.uncoveredPositions > 0 ? "red" : "green"}
+        />
+
+        <SimulationSummaryCard
+          label="Trabajos usados"
+          value={summary.workRequests}
+          tone="amber"
+        />
+      </div>
+
+      <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 px-5 py-4">
+          <h3 className="font-black text-slate-900">
+            Resumen por puesto
+          </h3>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] border-collapse">
+            <thead>
+              <tr className="bg-slate-50 text-left text-xs font-black uppercase tracking-wide text-slate-500">
+                <th className="px-5 py-4">Puesto</th>
+                <th className="px-5 py-4">Solicitados</th>
+                <th className="px-5 py-4">Asignados</th>
+                <th className="px-5 py-4">Sin cubrir</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {Object.entries(byPosition).map(([positionCode, item]) => (
+                <tr key={positionCode} className="border-t border-slate-100">
+                  <td className="px-5 py-4 font-black text-slate-900">
+                    {positionCode}
+                  </td>
+                  <td className="px-5 py-4 font-bold text-slate-700">
+                    {item.requested || 0}
+                  </td>
+                  <td className="px-5 py-4 font-bold text-emerald-700">
+                    {item.assigned || 0}
+                  </td>
+                  <td className="px-5 py-4 font-bold text-red-700">
+                    {item.uncovered || 0}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {uncoveredPositions.length > 0 && (
+        <div className="rounded-3xl border border-red-200 bg-red-50 shadow-sm">
+          <div className="border-b border-red-200 px-5 py-4">
+            <h3 className="font-black text-red-800">
+              Puestos sin cubrir
+            </h3>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] border-collapse">
+              <thead>
+                <tr className="text-left text-xs font-black uppercase tracking-wide text-red-700">
+                  <th className="px-5 py-4">Turno</th>
+                  <th className="px-5 py-4">Barco</th>
+                  <th className="px-5 py-4">Muelle</th>
+                  <th className="px-5 py-4">Puesto</th>
+                  <th className="px-5 py-4">Unidad</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {uncoveredPositions.map((position, index) => (
+                  <tr key={`${position.workRequestId}-${position.positionCode}-${position.unitNumber}-${index}`} className="border-t border-red-100">
+                    <td className="px-5 py-4 font-bold text-red-900">
+                      {position.shiftCode}
+                    </td>
+                    <td className="px-5 py-4 font-bold text-red-900">
+                      {position.shipName}
+                    </td>
+                    <td className="px-5 py-4 text-red-800">
+                      {position.berth?.name || "-"}
+                    </td>
+                    <td className="px-5 py-4 font-black text-red-900">
+                      {position.positionCode}
+                    </td>
+                    <td className="px-5 py-4 text-red-800">
+                      {position.unitNumber}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 px-5 py-4">
+          <h3 className="font-black text-slate-900">
+            Nombramiento generado
+          </h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Agrupado por ventana, turno, barco y muelle.
+          </p>
+        </div>
+
+        <div className="space-y-5 p-5">
+          {groupedList.length === 0 ? (
+            <div className="text-sm text-slate-500">
+              No hay asignaciones generadas.
+            </div>
+          ) : (
+            groupedList.map((group) => (
+              <div
+                key={group.key}
+                className="overflow-hidden rounded-3xl border border-slate-200"
+              >
+                <div className="bg-slate-50 px-5 py-4">
+                  <div className="font-black text-slate-900">
+                    {group.windowLabel} · {group.shiftCode}
+                  </div>
+                  <div className="text-sm text-slate-500">
+                    {group.shipName} · {group.berthName}
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[900px] border-collapse">
+                    <thead>
+                      <tr className="bg-white text-left text-xs font-black uppercase tracking-wide text-slate-500">
+                        <th className="px-5 py-4">Puesto</th>
+                        <th className="px-5 py-4">Unidad</th>
+                        <th className="px-5 py-4">Trabajador</th>
+                        <th className="px-5 py-4">Tipo</th>
+                        <th className="px-5 py-4">Motivo</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {group.items.map((assignment, index) => (
+                        <tr
+                          key={`${assignment.workRequestId}-${assignment.positionCode}-${assignment.unitNumber}-${assignment.workerCode}-${index}`}
+                          className="border-t border-slate-100"
+                        >
+                          <td className="px-5 py-4 font-black text-slate-900">
+                            {assignment.positionCode}
+                          </td>
+
+                          <td className="px-5 py-4 text-sm font-bold text-slate-700">
+                            {assignment.unitNumber}
+                          </td>
+
+                          <td className="px-5 py-4">
+                            <div className="font-black text-slate-900">
+                              {assignment.workerCode} · {assignment.workerName}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {assignment.rotationListCode || assignment.mainProfessionalGroup || ""}
+                            </div>
+                          </td>
+
+                          <td className="px-5 py-4">
+                            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+                              {assignment.coverageType || assignment.phase || "-"}
+                            </span>
+                          </td>
+
+                          <td className="max-w-sm px-5 py-4 text-sm text-slate-600">
+                            {assignment.reason || "-"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function NominatorWorkRequestsPage({ currentUser }) {
   const [workRequests, setWorkRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -234,6 +508,8 @@ export default function NominatorWorkRequestsPage({ currentUser }) {
 
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewData, setPreviewData] = useState(null);
+  const [simulationLoading, setSimulationLoading] = useState(false);
+  const [simulationResult, setSimulationResult] = useState(null);
 
   const [rejectingRequest, setRejectingRequest] = useState(null);
   const [rejectionReason, setRejectionReason] = useState("");
@@ -375,6 +651,7 @@ export default function NominatorWorkRequestsPage({ currentUser }) {
       }
 
       setPreviewData(result.data);
+      setSimulationResult(null);
     } catch (error) {
       setPreviewData(null);
       setErrorMessage(
@@ -384,6 +661,89 @@ export default function NominatorWorkRequestsPage({ currentUser }) {
       );
     } finally {
       setPreviewLoading(false);
+    }
+  }
+
+  function buildBlockItemsFromPreview(preview) {
+    if (!preview?.workDate || !Array.isArray(preview?.includedShiftCodes)) {
+      return [];
+    }
+
+    return preview.includedShiftCodes.map((shiftCode) => ({
+      workDate: preview.workDate,
+      shiftCode,
+    }));
+  }
+
+  function getSimulationPortId() {
+    if (previewData?.portId) {
+      return previewData.portId;
+    }
+
+    if (currentUser?.port?._id) {
+      return currentUser.port._id;
+    }
+
+    /**
+     * Provisional para SUPER_ADMIN mientras no tenemos selector de puerto.
+     * Debe coincidir con el puerto de Málaga.
+     */
+    return DEFAULT_PREVIEW_PORT_ID;
+  }
+
+  async function handleSimulateNomination() {
+    try {
+      setSimulationLoading(true);
+      setErrorMessage("");
+      setSuccessMessage("");
+      setSimulationResult(null);
+
+      if (!previewData) {
+        throw new Error("Primero debes preparar el nombramiento");
+      }
+
+      if (!previewData.includedRequests || previewData.includedRequests.length === 0) {
+        throw new Error("No hay solicitudes incluidas para simular");
+      }
+
+      const portId = getSimulationPortId();
+      const blockItems = buildBlockItemsFromPreview(previewData);
+
+      if (!portId) {
+        throw new Error("No se ha podido determinar el puerto");
+      }
+
+      if (blockItems.length === 0) {
+        throw new Error("No se han podido preparar los turnos del bloque");
+      }
+
+      const result = await simulateAppointmentBlock({
+        portId,
+        blockItems,
+        doorStartByRotationList: {},
+        simulationOptions: {
+          source: "NOMINATION_PREVIEW",
+          windowCode: previewData.windowCode,
+          windowName: previewData.windowName,
+          allowedWorkRequestStatuses: ["CONFIRMED", "CHANGEABLE"],
+        },
+      });
+
+      if (!result.success) {
+        throw new Error(result.message || "No se pudo simular el nombramiento");
+      }
+
+      setSimulationResult(result.data);
+      setSuccessMessage("Simulación de nombramiento generada correctamente");
+    } catch (error) {
+      setSimulationResult(null);
+      setErrorMessage(
+        error.response?.data?.message ||
+          error.message ||
+          "Error simulando nombramiento"
+      );
+    } finally {
+      setSimulationLoading(false);
     }
   }
 
@@ -733,6 +1093,36 @@ export default function NominatorWorkRequestsPage({ currentUser }) {
                 ]}
                 emptyText="No hay solicitudes rechazadas o anuladas para esta fecha."
               />
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900">
+                      Simular nombramiento
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Se usará solo el trabajo incluido arriba: solicitudes CONFIRMED y
+                      CHANGEABLE de esta ventana.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={
+                      simulationLoading ||
+                      !previewData.includedRequests ||
+                      previewData.includedRequests.length === 0
+                    }
+                    onClick={handleSimulateNomination}
+                    className="rounded-2xl bg-slate-950 px-6 py-3 font-black text-white shadow hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {simulationLoading
+                      ? "Simulando..."
+                      : "Simular nombramiento con estas solicitudes"}
+                  </button>
+                </div>
+              </div>
+
+              <NominationVisualResult simulationResult={simulationResult} />
             </div>
           )}
         </div>
