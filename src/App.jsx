@@ -3,6 +3,7 @@ import SimulationPage from "./pages/SimulationPage";
 import NominatorWorkRequestsPage from "./pages/nominator/NominatorWorkRequestsPage";
 import WorkersPage from "./pages/WorkersPage";
 import CompanyWorkRequestsPage from "./pages/company/CompanyWorkRequestsPage";
+import WorkerPortalPage from "./pages/worker/WorkerPortalPage";
 import {
   clearAuthToken,
   getAuthToken,
@@ -95,12 +96,20 @@ function buildMenuForUser(user) {
   if (role === ROLES.WORKER) {
     return [
       {
-        key: "workerDashboard",
-        label: "Mi panel",
-      },
-      {
         key: "workerAppointments",
         label: "Mi nombramiento",
+      },
+      {
+        key: "workerRest",
+        label: "Descansos",
+      },
+      {
+        key: "workerMonthlyTasks",
+        label: "Informe mensual",
+      },
+      {
+        key: "workerPayroll",
+        label: "Nómina",
       },
     ];
   }
@@ -207,7 +216,8 @@ function LoginPage({ onLoginSuccess }) {
           </h2>
 
           <p className="mt-2 text-sm text-slate-500">
-            Entra con un usuario de empresa, nominador o administrador.
+            Entra con un usuario de empresa, nominador, administrador o
+            trabajador.
           </p>
 
           <div className="mt-8 space-y-5">
@@ -253,8 +263,8 @@ function LoginPage({ onLoginSuccess }) {
           </button>
 
           <p className="mt-5 text-xs text-slate-500">
-            Para pruebas, puedes usar el usuario de empresa que acabamos de
-            crear: terminales@portflow.com
+            Para pruebas, puedes usar terminales@portflow.com o un usuario
+            WORKER creado con el script.
           </p>
         </form>
       </section>
@@ -334,10 +344,10 @@ export default function App() {
   function handleLoginSuccess(user) {
     setCurrentUser(user);
 
-    const firstMenuItem = buildMenuForUser(user)[0];
+    const firstMenuItem = buildMenuForUser(user);
 
-    if (firstMenuItem) {
-      setCurrentPage(firstMenuItem.key);
+    if (firstMenuItem.length > 0) {
+      setCurrentPage(firstMenuItem[0].key);
     }
   }
 
@@ -397,7 +407,8 @@ export default function App() {
                 {getUserDisplayName(currentUser)}
               </div>
               <div className="text-xs text-slate-500">
-                {currentUser.company?.name ||
+                {currentUser.worker?.fullName ||
+                  currentUser.company?.name ||
                   currentUser.port?.name ||
                   "Plataforma"}
               </div>
@@ -454,17 +465,28 @@ export default function App() {
         />
       )}
 
-      {currentPage === "workerDashboard" && (
+      {currentPage === "workerAppointments" && (
+        <WorkerPortalPage currentUser={currentUser} />
+      )}
+
+      {currentPage === "workerRest" && (
         <PlaceholderPage
-          title="Mi panel de trabajador"
-          description="Aquí el trabajador verá su nombramiento, descansos, restricciones e informe mensual."
+          title="Descansos"
+          description="Aquí el trabajador podrá consultar descansos, solicitar cambios y gestionar disponibilidad."
         />
       )}
 
-      {currentPage === "workerAppointments" && (
+      {currentPage === "workerMonthlyTasks" && (
         <PlaceholderPage
-          title="Mi nombramiento"
-          description="Vista diaria del trabajo asignado al trabajador."
+          title="Informe mensual"
+          description="Aquí el trabajador verá el resumen mensual de tareas realizadas."
+        />
+      )}
+
+      {currentPage === "workerPayroll" && (
+        <PlaceholderPage
+          title="Nómina"
+          description="Aquí el trabajador podrá consultar nóminas, certificados y datos fiscales."
         />
       )}
     </div>

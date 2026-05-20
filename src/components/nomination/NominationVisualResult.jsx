@@ -4,7 +4,15 @@ import {
   groupEntriesByBlock,
 } from "../../utils/nominationFormatter";
 
-function WorkerBadge({ assignment }) {
+function sameHighlightedWorker({ assignment, highlightedWorkerCode }) {
+  if (!assignment || !highlightedWorkerCode) {
+    return false;
+  }
+
+  return String(assignment.workerCode) === String(highlightedWorkerCode);
+}
+
+function WorkerBadge({ assignment, highlightedWorkerCode }) {
   if (!assignment) {
     return null;
   }
@@ -13,6 +21,22 @@ function WorkerBadge({ assignment }) {
     assignment.isDouble ||
     String(assignment.coverageType || "").includes("DOUBLE") ||
     String(assignment.phase || "").includes("DOUBLE");
+
+  const isHighlighted = sameHighlightedWorker({
+    assignment,
+    highlightedWorkerCode,
+  });
+
+  if (isHighlighted) {
+    return (
+      <span
+        className="inline-flex min-w-12 justify-center rounded-lg bg-blue-600 px-3 py-1 text-sm font-black text-white ring-2 ring-blue-300"
+        title={assignment.reason || "Tu asignación"}
+      >
+        {assignment.workerCode}
+      </span>
+    );
+  }
 
   return (
     <span
@@ -36,7 +60,7 @@ function MissingBadge() {
   );
 }
 
-function PositionLine({ row }) {
+function PositionLine({ row, highlightedWorkerCode }) {
   return (
     <div className="grid grid-cols-[150px_1fr] gap-3 border-t border-slate-100 px-4 py-2.5 first:border-t-0">
       <div>
@@ -53,6 +77,7 @@ function PositionLine({ row }) {
           <WorkerBadge
             key={`${assignment.workerId}-${assignment.positionCode}-${assignment.unitNumber}-${index}`}
             assignment={assignment}
+            highlightedWorkerCode={highlightedWorkerCode}
           />
         ))}
 
@@ -70,7 +95,7 @@ function PositionLine({ row }) {
   );
 }
 
-function WorkRequestSheet({ entry }) {
+function WorkRequestSheet({ entry, highlightedWorkerCode }) {
   const workRequest = entry.workRequest;
   const rows = buildPositionRows(entry);
 
@@ -93,23 +118,25 @@ function WorkRequestSheet({ entry }) {
             <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">
               Turno
             </div>
-            <div className="text-sm font-black">
-              {workRequest.shiftCode}
-            </div>
+            <div className="text-sm font-black">{workRequest.shiftCode}</div>
           </div>
         </div>
       </header>
 
       <div className="bg-slate-50/70">
         {rows.map((row) => (
-          <PositionLine key={row.originalPositionCode} row={row} />
+          <PositionLine
+            key={row.originalPositionCode}
+            row={row}
+            highlightedWorkerCode={highlightedWorkerCode}
+          />
         ))}
       </div>
     </article>
   );
 }
 
-function BlockSheet({ block }) {
+function BlockSheet({ block, highlightedWorkerCode }) {
   return (
     <section className="rounded-3xl border border-slate-300 bg-slate-100 p-4 shadow-sm">
       <header className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-950 px-5 py-4 text-white">
@@ -138,14 +165,18 @@ function BlockSheet({ block }) {
 
       <div className="grid gap-4">
         {block.entries.map((entry) => (
-          <WorkRequestSheet key={entry.workRequest._id} entry={entry} />
+          <WorkRequestSheet
+            key={entry.workRequest._id}
+            entry={entry}
+            highlightedWorkerCode={highlightedWorkerCode}
+          />
         ))}
       </div>
     </section>
   );
 }
 
-function Legend() {
+function Legend({ highlightedWorkerCode }) {
   return (
     <div className="flex flex-wrap gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm">
       <div className="flex items-center gap-2">
@@ -162,11 +193,23 @@ function Legend() {
         <span className="inline-flex h-6 w-10 rounded-lg bg-red-100 ring-1 ring-red-200" />
         <span className="font-bold text-slate-600">Sin cubrir</span>
       </div>
+
+      {highlightedWorkerCode && (
+        <div className="flex items-center gap-2">
+          <span className="inline-flex h-6 w-10 rounded-lg bg-blue-600 ring-2 ring-blue-300" />
+          <span className="font-bold text-slate-600">
+            Tú: {highlightedWorkerCode}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
 
-export default function NominationVisualResult({ simulationResult }) {
+export default function NominationVisualResult({
+  simulationResult,
+  highlightedWorkerCode = null,
+}) {
   if (!simulationResult) {
     return null;
   }
@@ -180,7 +223,7 @@ export default function NominationVisualResult({ simulationResult }) {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-sm font-black uppercase tracking-wide text-slate-500">
-              Nombramiento generado
+              Nombramiento publicado
             </p>
 
             <h2 className="mt-1 text-3xl font-black tracking-tight text-slate-950">
@@ -195,7 +238,7 @@ export default function NominationVisualResult({ simulationResult }) {
             </p>
           </div>
 
-          <Legend />
+          <Legend highlightedWorkerCode={highlightedWorkerCode} />
         </div>
       </div>
 
@@ -208,6 +251,7 @@ export default function NominationVisualResult({ simulationResult }) {
           <BlockSheet
             key={`${block.blockLabel}-${block.nominationWindowOrder}`}
             block={block}
+            highlightedWorkerCode={highlightedWorkerCode}
           />
         ))
       )}
