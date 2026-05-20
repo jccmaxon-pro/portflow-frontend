@@ -1,0 +1,35 @@
+import apiClient from "./apiClient";
+
+export async function createDraftNominationRun(data) {
+  const response = await apiClient.post("/nomination-runs", data);
+
+  return response.data;
+}
+
+export async function getNominationRuns(params = {}) {
+  const response = await apiClient.get("/nomination-runs", {
+    params,
+  });
+
+  return response.data;
+}
+
+export async function getNominationRunById(nominationRunId) {
+  const response = await apiClient.get(`/nomination-runs/${nominationRunId}`);
+
+  return response.data;
+}
+
+export async function publishNominationRun(nominationRunId) {
+  const response = await apiClient.patch(
+    `/nomination-runs/${nominationRunId}/publish`
+  );
+
+  return response.data;
+}
+
+export async function cancelNominationRun(nominationRunId) {
+  const response = await apiClient.delete(`/nomination-runs/${nominationRunId}`);
+
+  return response.data;
+}

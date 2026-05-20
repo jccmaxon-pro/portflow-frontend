@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { simulateAppointmentBlock } from "../../api/appointmentSimulationApi";
 import NominationVisualResult from "../../components/nomination/NominationVisualResult";
+import SavedNominationRunsPanel from "../../components/nomination/SavedNominationRunsPanel";
+import { createDraftNominationRun } from "../../api/nominationRunApi";
 import {
   cancelWorkRequest,
   confirmWorkRequest,
@@ -510,6 +512,9 @@ export default function NominatorWorkRequestsPage({ currentUser }) {
   const [previewData, setPreviewData] = useState(null);
   const [simulationLoading, setSimulationLoading] = useState(false);
   const [simulationResult, setSimulationResult] = useState(null);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [savedDraftRun, setSavedDraftRun] = useState(null);
+  const [savedRunsRefreshKey, setSavedRunsRefreshKey] = useState(0);
 
   const [rejectingRequest, setRejectingRequest] = useState(null);
   const [rejectionReason, setRejectionReason] = useState("");
@@ -652,6 +657,7 @@ export default function NominatorWorkRequestsPage({ currentUser }) {
 
       setPreviewData(result.data);
       setSimulationResult(null);
+      setSavedDraftRun(null);
     } catch (error) {
       setPreviewData(null);
       setErrorMessage(
@@ -737,6 +743,7 @@ export default function NominatorWorkRequestsPage({ currentUser }) {
       setSuccessMessage("Simulación de nombramiento generada correctamente");
     } catch (error) {
       setSimulationResult(null);
+      setSavedDraftRun(null);
       setErrorMessage(
         error.response?.data?.message ||
           error.message ||
@@ -744,6 +751,68 @@ export default function NominatorWorkRequestsPage({ currentUser }) {
       );
     } finally {
       setSimulationLoading(false);
+    }
+  }
+
+  async function handleSaveDraftNominationRun() {
+    try {
+      setSavingDraft(true);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      if (!previewData) {
+        throw new Error("Primero debes preparar el nombramiento");
+      }
+
+      if (!simulationResult) {
+        throw new Error("Primero debes simular el nombramiento");
+      }
+
+      const portId = getSimulationPortId();
+
+      if (!portId) {
+        throw new Error("No se ha podido determinar el puerto");
+      }
+
+      const blockItems = buildBlockItemsFromPreview(previewData);
+
+      if (blockItems.length === 0) {
+        throw new Error("No se han podido preparar los turnos del bloque");
+      }
+
+      const usedWorkRequests = (previewData.includedRequests || [])
+        .map((workRequest) => workRequest._id)
+        .filter(Boolean);
+
+      const result = await createDraftNominationRun({
+        portId,
+        workDate: previewData.workDate,
+        windowCode: previewData.windowCode,
+        windowName: previewData.windowName,
+        source: "NOMINATION_PREVIEW",
+        blockItems,
+        usedWorkRequests,
+        result: simulationResult,
+      });
+
+      if (!result.success) {
+        throw new Error(
+          result.message || "No se pudo guardar el nombramiento como borrador"
+        );
+      }
+
+      setSavedDraftRun(result.data);
+      setSuccessMessage("Nombramiento guardado como borrador correctamente");
+      setSavedRunsRefreshKey((currentValue) => currentValue + 1);
+    } catch (error) {
+      setSavedDraftRun(null);
+      setErrorMessage(
+        error.response?.data?.message ||
+          error.message ||
+          "Error guardando borrador de nombramiento"
+      );
+    } finally {
+      setSavingDraft(false);
     }
   }
 
@@ -883,6 +952,11 @@ export default function NominatorWorkRequestsPage({ currentUser }) {
             {successMessage}
           </div>
         )}
+
+        <SavedNominationRunsPanel
+          currentUser={currentUser}
+          refreshKey={savedRunsRefreshKey}
+        />
 
         <div className="mb-6 grid gap-4 md:grid-cols-5">
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -1123,6 +1197,42 @@ export default function NominatorWorkRequestsPage({ currentUser }) {
               </div>
 
               <NominationVisualResult simulationResult={simulationResult} />
+
+              {simulationResult && (
+                <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-black text-slate-900">
+                        Guardar nombramiento
+                      </h3>
+
+                      <p className="mt-1 text-sm text-slate-500">
+                        Guarda esta simulación como borrador para poder revisarla, publicarla
+                        o recuperarla más adelante.
+                      </p>
+
+                      {savedDraftRun && (
+                        <div className="mt-3 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
+                          Borrador guardado correctamente · Estado: {savedDraftRun.status}
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={savingDraft || Boolean(savedDraftRun)}
+                      onClick={handleSaveDraftNominationRun}
+                      className="rounded-2xl bg-emerald-600 px-6 py-3 font-black text-white shadow hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {savingDraft
+                        ? "Guardando..."
+                        : savedDraftRun
+                        ? "Borrador guardado"
+                        : "Guardar borrador"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
