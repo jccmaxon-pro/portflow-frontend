@@ -16,6 +16,14 @@ const STATUS_LABELS = {
   CANCELLED: "Anulado",
 };
 
+const STATUS_FILTERS = [
+  { value: "", label: "Todos" },
+  { value: "DRAFT", label: "Borradores" },
+  { value: "PUBLISHED", label: "Publicados" },
+  { value: "CLOSED", label: "Cerrados" },
+  { value: "CANCELLED", label: "Anulados" },
+];
+
 function formatDate(dateValue) {
   if (!dateValue) {
     return "-";
@@ -164,6 +172,7 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
   const [nominationRuns, setNominationRuns] = useState([]);
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState(null);
+  const [statusFilter, setStatusFilter] = useState("");
 
   const [selectedRun, setSelectedRun] = useState(null);
   const [loadingDetailId, setLoadingDetailId] = useState(null);
@@ -180,6 +189,10 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
 
       if (currentUser?.role === "SUPER_ADMIN") {
         params.portId = currentUser?.port?._id || DEFAULT_PREVIEW_PORT_ID;
+      }
+
+      if (statusFilter) {
+        params.status = statusFilter;
       }
 
       const result = await getNominationRuns(params);
@@ -202,7 +215,7 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
 
   useEffect(() => {
     loadNominationRuns();
-  }, [refreshKey]);
+  }, [refreshKey, statusFilter]);
 
   async function handleView(nominationRun) {
     try {
@@ -311,23 +324,46 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
 
   return (
     <section className="mb-6 rounded-3xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 p-5">
-        <div>
-          <h2 className="text-xl font-black text-slate-900">
-            Nombramientos guardados
-          </h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Borradores y nombramientos publicados generados desde la simulación.
-          </p>
+      <div className="border-b border-slate-200 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+                <h2 className="text-xl font-black text-slate-900">
+                    Nombramientos guardados
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                    Borradores y nombramientos publicados generados desde la simulación.
+                </p>
+            </div>
+
+            <button
+                type="button"
+                onClick={loadNominationRuns}
+                className="rounded-2xl bg-slate-100 px-4 py-3 font-black text-slate-700 hover:bg-slate-200"
+            >
+                Actualizar lista
+            </button>
         </div>
 
-        <button
-          type="button"
-          onClick={loadNominationRuns}
-          className="rounded-2xl bg-slate-100 px-4 py-3 font-black text-slate-700 hover:bg-slate-200"
-        >
-          Actualizar lista
-        </button>
+        <div className="mt-4 flex flex-wrap gap-2">
+            {STATUS_FILTERS.map((filter) => {
+                const isActive = statusFilter === filter.value;
+
+                return (
+                    <button
+                        key={filter.value || "ALL"}
+                        type="button"
+                        onClick={() => setStatusFilter(filter.value)}
+                        className={`rounded-2xl px-4 py-2 text-sm font-black ${
+                            isActive
+                                ? "bg-slate-950 text-white"
+                                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        }`}
+                    >
+                        {filter.label}
+                    </button>
+                );
+            })}
+        </div>
       </div>
 
       {errorMessage && (
