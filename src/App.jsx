@@ -3,6 +3,7 @@ import SimulationPage from "./pages/SimulationPage";
 import NominatorWorkRequestsPage from "./pages/nominator/NominatorWorkRequestsPage";
 import WorkersPage from "./pages/WorkersPage";
 import CompanyWorkRequestsPage from "./pages/company/CompanyWorkRequestsPage";
+import WorkerRestPage from "./pages/worker/WorkerRestPage";
 import WorkerPortalPage from "./pages/worker/WorkerPortalPage";
 import {
   clearAuthToken,
@@ -470,10 +471,7 @@ export default function App() {
       )}
 
       {currentPage === "workerRest" && (
-        <PlaceholderPage
-          title="Descansos"
-          description="Aquí el trabajador podrá consultar descansos, solicitar cambios y gestionar disponibilidad."
-        />
+        <WorkerRestPage currentUser={currentUser} />
       )}
 
       {currentPage === "workerMonthlyTasks" && (
