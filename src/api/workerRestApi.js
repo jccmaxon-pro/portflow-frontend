@@ -40,3 +40,14 @@ export async function getAdminRestGroups(params = {}) {
 
   return response.data;
 }
+
+export async function getAdminRestGroupAssignments(params = {}) {
+  const response = await apiClient.get(
+    "/worker-rest/admin/group-assignments",
+    {
+      params,
+    }
+  );
+
+  return response.data;
+}

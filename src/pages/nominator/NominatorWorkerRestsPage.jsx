@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  getAdminRestGroupAssignments,
   getAdminRestGroups,
   getAdminRestSelections,
 } from "../../api/workerRestApi";
@@ -171,6 +172,188 @@ function RestSelectionsTable({ selections }) {
   );
 }
 
+function RestGroupCards({
+  restGroups,
+  selectedGroupCode,
+  onViewWorkers,
+}) {
+  if (!restGroups || restGroups.length === 0) {
+    return (
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 text-slate-500 shadow-sm">
+        No hay grupos de descanso configurados para este año.
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-4">
+      {restGroups.map((group) => {
+        const isSelected = selectedGroupCode === group.code;
+
+        return (
+          <button
+            key={group.code}
+            type="button"
+            onClick={() => onViewWorkers(group.code)}
+            className={`rounded-3xl border p-5 text-left shadow-sm transition ${
+              isSelected
+                ? "border-slate-950 bg-slate-950 text-white"
+                : "border-slate-200 bg-white text-slate-900 hover:border-slate-400"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p
+                  className={`text-xs font-black uppercase tracking-wide ${
+                    isSelected ? "text-slate-300" : "text-slate-500"
+                  }`}
+                >
+                  {group.calendarType || "Grupo"}
+                </p>
+
+                <h3 className="mt-2 text-lg font-black leading-tight">
+                  {group.name}
+                </h3>
+
+                <p
+                  className={`mt-2 text-xs font-bold ${
+                    isSelected ? "text-slate-300" : "text-slate-500"
+                  }`}
+                >
+                  {group.code}
+                </p>
+              </div>
+
+              <span
+                className="mt-1 h-4 w-4 shrink-0 rounded-full ring-2 ring-white"
+                style={{
+                  backgroundColor: group.color || "#94a3b8",
+                }}
+              />
+            </div>
+
+            <div
+              className={`mt-5 rounded-2xl px-4 py-3 ${
+                isSelected ? "bg-white/10" : "bg-slate-50"
+              }`}
+            >
+              <p
+                className={`text-xs font-black uppercase tracking-wide ${
+                  isSelected ? "text-slate-300" : "text-slate-500"
+                }`}
+              >
+                Trabajadores asignados
+              </p>
+
+              <p className="mt-1 text-3xl font-black">
+                {group.workerCount || 0}
+              </p>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function RestGroupAssignmentsTable({ assignments, loading }) {
+  if (loading) {
+    return (
+      <div className="rounded-3xl border border-slate-200 bg-white p-8 font-bold text-slate-500 shadow-sm">
+        Cargando trabajadores del grupo...
+      </div>
+    );
+  }
+
+  if (!assignments || assignments.length === 0) {
+    return (
+      <div className="rounded-3xl border border-slate-200 bg-white p-8 text-slate-500 shadow-sm">
+        Selecciona un grupo para ver sus trabajadores, o no hay trabajadores
+        asignados a este grupo.
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
+        <h2 className="text-xl font-black text-slate-900">
+          Trabajadores del grupo
+        </h2>
+
+        <p className="mt-1 text-sm text-slate-500">
+          Personal actualmente asignado a este grupo de descanso.
+        </p>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px] border-collapse">
+          <thead>
+            <tr className="bg-white text-left text-xs font-black uppercase tracking-wide text-slate-500">
+              <th className="px-5 py-4">Nº</th>
+              <th className="px-5 py-4">Trabajador</th>
+              <th className="px-5 py-4">Grupo profesional</th>
+              <th className="px-5 py-4">Grupo descanso</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {assignments.map((assignment) => {
+              const worker = assignment.worker;
+              const restGroup = assignment.restGroup;
+
+              return (
+                <tr
+                  key={assignment._id}
+                  className="border-t border-slate-100"
+                >
+                  <td className="px-5 py-4 text-xl font-black text-slate-950">
+                    {worker?.workerCode || "-"}
+                  </td>
+
+                  <td className="px-5 py-4">
+                    <div className="font-black text-slate-900">
+                      {worker?.fullName || "-"}
+                    </div>
+                    <div className="text-xs font-bold text-slate-500">
+                      ID trabajador: {worker?._id || "-"}
+                    </div>
+                  </td>
+
+                  <td className="px-5 py-4 font-bold text-slate-700">
+                    {worker?.mainProfessionalGroup ||
+                      worker?.professionalGroup ||
+                      "-"}
+                  </td>
+
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="h-3 w-3 rounded-full"
+                        style={{
+                          backgroundColor: restGroup?.color || "#94a3b8",
+                        }}
+                      />
+                      <div>
+                        <div className="font-bold text-slate-900">
+                          {restGroup?.name || "-"}
+                        </div>
+                        <div className="text-xs font-bold text-slate-500">
+                          {restGroup?.code || "-"}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function NominatorWorkerRestsPage({ currentUser }) {
   const [year, setYear] = useState(2026);
   const [date, setDate] = useState("");
@@ -179,6 +362,9 @@ export default function NominatorWorkerRestsPage({ currentUser }) {
   const [workerCode, setWorkerCode] = useState("");
   const [restGroupCode, setRestGroupCode] = useState("");
   const [restGroups, setRestGroups] = useState([]);
+  const [selectedGroupForWorkers, setSelectedGroupForWorkers] = useState("");
+  const [groupAssignmentsData, setGroupAssignmentsData] = useState(null);
+  const [groupAssignmentsLoading, setGroupAssignmentsLoading] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [restData, setRestData] = useState(null);
@@ -257,6 +443,49 @@ export default function NominatorWorkerRestsPage({ currentUser }) {
     }
   }
 
+  async function loadRestGroupAssignments(groupCode) {
+    if (!groupCode) {
+      setGroupAssignmentsData(null);
+      setSelectedGroupForWorkers("");
+      return;
+    }
+
+    try {
+      setGroupAssignmentsLoading(true);
+      setErrorMessage("");
+      setSelectedGroupForWorkers(groupCode);
+
+      const params = {
+        year,
+        restGroupCode: groupCode,
+      };
+
+      if (currentUser?.role === "SUPER_ADMIN") {
+        params.portId = currentUser?.port?._id || DEFAULT_PORT_ID;
+      }
+
+      const result = await getAdminRestGroupAssignments(params);
+
+      if (!result.success) {
+        throw new Error(
+          result.message ||
+            "No se pudieron cargar los trabajadores del grupo"
+        );
+      }
+
+      setGroupAssignmentsData(result.data);
+    } catch (error) {
+      setGroupAssignmentsData(null);
+      setErrorMessage(
+        error.response?.data?.message ||
+          error.message ||
+          "Error cargando trabajadores del grupo"
+      );
+    } finally {
+      setGroupAssignmentsLoading(false);
+    }
+  }
+
   async function loadSelections() {
     try {
       setLoading(true);
@@ -289,6 +518,8 @@ export default function NominatorWorkerRestsPage({ currentUser }) {
   }, []);
 
   useEffect(() => {
+    setSelectedGroupForWorkers("");
+    setGroupAssignmentsData(null);
     loadRestGroups();
   }, [year]);
 
@@ -532,6 +763,8 @@ export default function NominatorWorkerRestsPage({ currentUser }) {
             </p>
           </div>
         </div>
+        
+        
 
         {loading ? (
           <div className="rounded-3xl border border-slate-200 bg-white p-8 font-bold text-slate-500 shadow-sm">
@@ -540,6 +773,39 @@ export default function NominatorWorkerRestsPage({ currentUser }) {
         ) : (
           <RestSelectionsTable selections={selections} />
         )}
+
+        <div className="mb-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-black uppercase tracking-wide text-slate-500">
+                Administración de grupos
+              </p>
+
+              <h2 className="mt-1 text-2xl font-black text-slate-950">
+                Grupos de descanso configurados
+              </h2>
+
+              <p className="mt-2 max-w-3xl text-sm text-slate-600">
+                Consulta qué grupos de descanso existen y qué trabajadores tiene cada
+                uno asignado. Más adelante aquí podremos mover trabajadores entre
+                grupos y regenerar calendarios.
+              </p>
+            </div>
+          </div>
+
+          <RestGroupCards
+            restGroups={restGroups}
+            selectedGroupCode={selectedGroupForWorkers}
+            onViewWorkers={loadRestGroupAssignments}
+          />
+
+          <div className="mt-5">
+            <RestGroupAssignmentsTable
+              assignments={groupAssignmentsData?.assignments || []}
+              loading={groupAssignmentsLoading}
+            />
+          </div>
+        </div>
       </section>
     </main>
   );
