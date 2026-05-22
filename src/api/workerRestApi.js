@@ -24,3 +24,19 @@ export async function cancelRestSelection(selectionId) {
 
   return response.data;
 }
+
+export async function getAdminRestSelections(params = {}) {
+  const response = await apiClient.get("/worker-rest/admin/selections", {
+    params,
+  });
+
+  return response.data;
+}
+
+export async function getAdminRestGroups(params = {}) {
+  const response = await apiClient.get("/worker-rest/admin/groups", {
+    params,
+  });
+
+  return response.data;
+}

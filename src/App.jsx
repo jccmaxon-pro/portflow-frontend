@@ -4,6 +4,7 @@ import NominatorWorkRequestsPage from "./pages/nominator/NominatorWorkRequestsPa
 import WorkersPage from "./pages/WorkersPage";
 import CompanyWorkRequestsPage from "./pages/company/CompanyWorkRequestsPage";
 import WorkerRestPage from "./pages/worker/WorkerRestPage";
+import NominatorWorkerRestsPage from "./pages/nominator/NominatorWorkerRestsPage";
 import WorkerPortalPage from "./pages/worker/WorkerPortalPage";
 import {
   clearAuthToken,
@@ -69,6 +70,10 @@ function buildMenuForUser(user) {
       {
         key: "workRequests",
         label: "Solicitudes de trabajo",
+      },
+      {
+        key: "workerRests",
+        label: "Descansos",
       },
       {
         key: "companies",
@@ -439,6 +444,10 @@ export default function App() {
 
       {currentPage === "workRequests" && (
         <NominatorWorkRequestsPage currentUser={currentUser} />
+      )}
+
+      {currentPage === "workerRests" && (
+        <NominatorWorkerRestsPage currentUser={currentUser} />
       )}
 
       {currentPage === "companies" && (
