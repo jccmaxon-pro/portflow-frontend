@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  assignWorkerToRestGroup,
   getAdminRestGroupAssignments,
   getAdminRestGroups,
   getAdminRestSelections,
+  moveWorkerRestGroup,
 } from "../../api/workerRestApi";
 
 const DEFAULT_PORT_ID = "69f210fe5417a1641d23188d";
@@ -256,7 +258,11 @@ function RestGroupCards({
   );
 }
 
-function RestGroupAssignmentsTable({ assignments, loading }) {
+function RestGroupAssignmentsTable({
+  assignments,
+  loading,
+  onMoveWorker,
+}) {
   if (loading) {
     return (
       <div className="rounded-3xl border border-slate-200 bg-white p-8 font-bold text-slate-500 shadow-sm">
@@ -294,6 +300,7 @@ function RestGroupAssignmentsTable({ assignments, loading }) {
               <th className="px-5 py-4">Trabajador</th>
               <th className="px-5 py-4">Grupo profesional</th>
               <th className="px-5 py-4">Grupo descanso</th>
+              <th className="px-5 py-4 text-right">Acciones</th>
             </tr>
           </thead>
 
@@ -326,6 +333,16 @@ function RestGroupAssignmentsTable({ assignments, loading }) {
                       "-"}
                   </td>
 
+                  <td className="px-5 py-4 text-right">
+                    <button
+                        type="button"
+                        onClick={() => onMoveWorker(assignment)}
+                        className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white hover:bg-slate-700"
+                    >
+                        Mover
+                    </button>
+                  </td>
+
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-2">
                       <span
@@ -354,6 +371,248 @@ function RestGroupAssignmentsTable({ assignments, loading }) {
   );
 }
 
+function MoveWorkerGroupForm({
+  moveForm,
+  restGroups,
+  moveTargetGroupCode,
+  setMoveTargetGroupCode,
+  moveReason,
+  setMoveReason,
+  moveNotes,
+  setMoveNotes,
+  moveLoading,
+  onSubmit,
+  onCancel,
+}) {
+  if (!moveForm) {
+    return null;
+  }
+
+  const worker = moveForm.worker;
+  const currentRestGroup = moveForm.restGroup;
+
+  const targetGroups = restGroups.filter((group) => {
+    return group.code !== currentRestGroup?.code;
+  });
+
+  return (
+    <form
+      onSubmit={onSubmit}
+      className="mt-5 rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-black uppercase tracking-wide text-amber-700">
+            Mover trabajador de grupo
+          </p>
+
+          <h3 className="mt-1 text-2xl font-black text-slate-950">
+            Nº {worker?.workerCode || "-"} · {worker?.fullName || "-"}
+          </h3>
+
+          <p className="mt-2 text-sm font-bold text-slate-600">
+            Grupo actual: {currentRestGroup?.name || "-"}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-xl bg-white px-4 py-2 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-100"
+        >
+          Cancelar
+        </button>
+      </div>
+
+      <div className="mt-5 grid gap-4 md:grid-cols-3">
+        <label className="block">
+          <span className="mb-2 block text-sm font-bold text-slate-700">
+            Grupo destino
+          </span>
+
+          <select
+            value={moveTargetGroupCode}
+            onChange={(event) => setMoveTargetGroupCode(event.target.value)}
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-900"
+          >
+            <option value="">Selecciona grupo</option>
+
+            {targetGroups.map((group) => (
+              <option key={group.code} value={group.code}>
+                {group.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="mb-2 block text-sm font-bold text-slate-700">
+            Motivo
+          </span>
+
+          <input
+            type="text"
+            value={moveReason}
+            onChange={(event) => setMoveReason(event.target.value)}
+            className="w-full rounded-2xl border border-slate-300 px-4 py-3 font-bold text-slate-900"
+            placeholder="Ej: cambio administrativo"
+          />
+        </label>
+
+        <label className="block">
+          <span className="mb-2 block text-sm font-bold text-slate-700">
+            Notas
+          </span>
+
+          <input
+            type="text"
+            value={moveNotes}
+            onChange={(event) => setMoveNotes(event.target.value)}
+            className="w-full rounded-2xl border border-slate-300 px-4 py-3 font-bold text-slate-900"
+            placeholder="Comentario interno opcional"
+          />
+        </label>
+      </div>
+
+      <div className="mt-5 flex flex-wrap justify-end gap-3">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-2xl bg-white px-5 py-3 font-black text-slate-700 shadow-sm hover:bg-slate-100"
+        >
+          Cancelar
+        </button>
+
+        <button
+          type="submit"
+          disabled={moveLoading}
+          className="rounded-2xl bg-slate-950 px-5 py-3 font-black text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {moveLoading ? "Moviendo..." : "Confirmar cambio"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function AssignWorkerGroupForm({
+  isOpen,
+  restGroups,
+  workerCode,
+  setWorkerCode,
+  restGroupCode,
+  setRestGroupCode,
+  notes,
+  setNotes,
+  loading,
+  onSubmit,
+  onCancel,
+}) {
+  if (!isOpen) {
+    return null;
+  }
+
+  return (
+    <form
+      onSubmit={onSubmit}
+      className="mb-5 rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-black uppercase tracking-wide text-blue-700">
+            Añadir trabajador a grupo
+          </p>
+
+          <h3 className="mt-1 text-2xl font-black text-slate-950">
+            Alta en cuadrante de descanso
+          </h3>
+
+          <p className="mt-2 max-w-3xl text-sm font-bold text-slate-600">
+            Usa esta opción para trabajadores nuevos o trabajadores que todavía
+            no tienen grupo de descanso asignado para el año seleccionado.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-xl bg-white px-4 py-2 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-100"
+        >
+          Cancelar
+        </button>
+      </div>
+
+      <div className="mt-5 grid gap-4 md:grid-cols-3">
+        <label className="block">
+          <span className="mb-2 block text-sm font-bold text-slate-700">
+            Nº trabajador
+          </span>
+
+          <input
+            type="text"
+            value={workerCode}
+            onChange={(event) => setWorkerCode(event.target.value)}
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-900"
+            placeholder="Ej: 999"
+          />
+        </label>
+
+        <label className="block">
+          <span className="mb-2 block text-sm font-bold text-slate-700">
+            Grupo descanso
+          </span>
+
+          <select
+            value={restGroupCode}
+            onChange={(event) => setRestGroupCode(event.target.value)}
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-900"
+          >
+            <option value="">Selecciona grupo</option>
+
+            {restGroups.map((group) => (
+              <option key={group.code} value={group.code}>
+                {group.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="mb-2 block text-sm font-bold text-slate-700">
+            Notas
+          </span>
+
+          <input
+            type="text"
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-900"
+            placeholder="Alta inicial, incorporación, etc."
+          />
+        </label>
+      </div>
+
+      <div className="mt-5 flex justify-end gap-3">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-2xl bg-white px-5 py-3 font-black text-slate-700 shadow-sm hover:bg-slate-100"
+        >
+          Cancelar
+        </button>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="rounded-2xl bg-slate-950 px-5 py-3 font-black text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {loading ? "Asignando..." : "Asignar trabajador"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export default function NominatorWorkerRestsPage({ currentUser }) {
   const [year, setYear] = useState(2026);
   const [date, setDate] = useState("");
@@ -365,6 +624,18 @@ export default function NominatorWorkerRestsPage({ currentUser }) {
   const [selectedGroupForWorkers, setSelectedGroupForWorkers] = useState("");
   const [groupAssignmentsData, setGroupAssignmentsData] = useState(null);
   const [groupAssignmentsLoading, setGroupAssignmentsLoading] = useState(false);
+  const [moveForm, setMoveForm] = useState(null);
+  const [moveTargetGroupCode, setMoveTargetGroupCode] = useState("");
+  const [moveReason, setMoveReason] = useState("");
+  const [moveNotes, setMoveNotes] = useState("");
+  const [moveLoading, setMoveLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+
+  const [assignFormOpen, setAssignFormOpen] = useState(false);
+  const [assignWorkerCode, setAssignWorkerCode] = useState("");
+  const [assignRestGroupCode, setAssignRestGroupCode] = useState("");
+  const [assignNotes, setAssignNotes] = useState("");
+  const [assignLoading, setAssignLoading] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [restData, setRestData] = useState(null);
@@ -483,6 +754,151 @@ export default function NominatorWorkerRestsPage({ currentUser }) {
       );
     } finally {
       setGroupAssignmentsLoading(false);
+    }
+  }
+
+  function openMoveWorkerForm(assignment) {
+    setMoveForm(assignment);
+    setMoveTargetGroupCode("");
+    setMoveReason("");
+    setMoveNotes("");
+    setSuccessMessage("");
+    setErrorMessage("");
+  }
+
+  function closeMoveWorkerForm() {
+    setMoveForm(null);
+    setMoveTargetGroupCode("");
+    setMoveReason("");
+    setMoveNotes("");
+    setMoveLoading(false);
+  }
+
+  async function handleMoveWorkerSubmit(event) {
+    event.preventDefault();
+
+    if (!moveForm?.worker?.workerCode) {
+      setErrorMessage("No se ha seleccionado trabajador");
+      return;
+    }
+
+    if (!moveTargetGroupCode) {
+      setErrorMessage("Selecciona un grupo destino");
+      return;
+    }
+
+    try {
+      setMoveLoading(true);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      const payload = {
+        year,
+        workerCode: moveForm.worker.workerCode,
+        newRestGroupCode: moveTargetGroupCode,
+        reason: moveReason,
+        notes: moveNotes,
+      };
+
+      if (currentUser?.role === "SUPER_ADMIN") {
+        payload.portId = currentUser?.port?._id || DEFAULT_PORT_ID;
+      }
+
+      const result = await moveWorkerRestGroup(payload);
+
+      if (!result.success) {
+        throw new Error(
+          result.message || "No se pudo mover el trabajador de grupo"
+        );
+      }
+
+      setSuccessMessage(result.data?.message || "Trabajador movido correctamente");
+
+      const groupToReload = selectedGroupForWorkers;
+
+      closeMoveWorkerForm();
+
+      await loadRestGroups();
+
+      if (groupToReload) {
+        await loadRestGroupAssignments(groupToReload);
+      }
+
+      await loadSelections();
+    } catch (error) {
+      setErrorMessage(
+        error.response?.data?.message ||
+          error.message ||
+          "Error moviendo trabajador de grupo"
+      );
+    } finally {
+      setMoveLoading(false);
+    }
+  }
+
+  async function handleAssignWorkerSubmit(event) {
+    event.preventDefault();
+
+    if (!assignWorkerCode.trim()) {
+      setErrorMessage("Introduce el número de trabajador");
+      return;
+    }
+
+    if (!assignRestGroupCode) {
+      setErrorMessage("Selecciona un grupo de descanso");
+      return;
+    }
+
+    try {
+      setAssignLoading(true);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      const payload = {
+        year,
+        workerCode: assignWorkerCode.trim(),
+        restGroupCode: assignRestGroupCode,
+        notes: assignNotes,
+      };
+
+      if (currentUser?.role === "SUPER_ADMIN") {
+        payload.portId = currentUser?.port?._id || DEFAULT_PORT_ID;
+      }
+
+      const result = await assignWorkerToRestGroup(payload);
+
+      if (!result.success) {
+        throw new Error(
+          result.message || "No se pudo asignar el trabajador al grupo"
+        );
+      }
+
+      setSuccessMessage(
+        result.data?.message || "Trabajador asignado correctamente"
+      );
+
+      const groupToReload = assignRestGroupCode;
+
+      setAssignWorkerCode("");
+      setAssignRestGroupCode("");
+      setAssignNotes("");
+      setAssignFormOpen(false);
+
+      await loadRestGroups();
+
+      if (groupToReload) {
+        await loadRestGroupAssignments(groupToReload);
+      }
+
+      await loadSelections();
+    } catch (error) {
+      setErrorMessage(
+        error.response?.data?.message ||
+          error.message ||
+          "Error asignando trabajador a grupo"
+      );
+    } finally {
+      setAssignLoading(false);
     }
   }
 
@@ -719,6 +1135,12 @@ export default function NominatorWorkerRestsPage({ currentUser }) {
           </div>
         )}
 
+        {successMessage && (
+          <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 font-bold text-emerald-700">
+            {successMessage}
+          </div>
+        )}
+
         <div className="mb-6 grid gap-4 md:grid-cols-3">
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-xs font-black uppercase tracking-wide text-slate-500">
@@ -791,7 +1213,38 @@ export default function NominatorWorkerRestsPage({ currentUser }) {
                 grupos y regenerar calendarios.
               </p>
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                setAssignFormOpen(true);
+                setSuccessMessage("");
+                setErrorMessage("");
+              }}
+              className="rounded-2xl bg-blue-600 px-5 py-3 font-black text-white shadow-sm hover:bg-blue-700"
+            >
+              Añadir trabajador
+            </button>
+
           </div>
+
+          <AssignWorkerGroupForm
+            isOpen={assignFormOpen}
+            restGroups={restGroups}
+            workerCode={assignWorkerCode}
+            setWorkerCode={setAssignWorkerCode}
+            restGroupCode={assignRestGroupCode}
+            setRestGroupCode={setAssignRestGroupCode}
+            notes={assignNotes}
+            setNotes={setAssignNotes}
+            loading={assignLoading}
+            onSubmit={handleAssignWorkerSubmit}
+            onCancel={() => {
+              setAssignFormOpen(false);
+              setAssignWorkerCode("");
+              setAssignRestGroupCode("");
+              setAssignNotes("");
+            }}
+          />
 
           <RestGroupCards
             restGroups={restGroups}
@@ -803,6 +1256,21 @@ export default function NominatorWorkerRestsPage({ currentUser }) {
             <RestGroupAssignmentsTable
               assignments={groupAssignmentsData?.assignments || []}
               loading={groupAssignmentsLoading}
+              onMoveWorker={openMoveWorkerForm}
+            />
+
+            <MoveWorkerGroupForm
+              moveForm={moveForm}
+              restGroups={restGroups}
+              moveTargetGroupCode={moveTargetGroupCode}
+              setMoveTargetGroupCode={setMoveTargetGroupCode}
+              moveReason={moveReason}
+              setMoveReason={setMoveReason}
+              moveNotes={moveNotes}
+              setMoveNotes={setMoveNotes}
+              moveLoading={moveLoading}
+              onSubmit={handleMoveWorkerSubmit}
+              onCancel={closeMoveWorkerForm}
             />
           </div>
         </div>

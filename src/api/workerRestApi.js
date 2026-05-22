@@ -51,3 +51,21 @@ export async function getAdminRestGroupAssignments(params = {}) {
 
   return response.data;
 }
+
+export async function moveWorkerRestGroup(data = {}) {
+  const response = await apiClient.post(
+    "/worker-rest/admin/move-worker-group",
+    data
+  );
+
+  return response.data;
+}
+
+export async function assignWorkerToRestGroup(data = {}) {
+  const response = await apiClient.post(
+    "/worker-rest/admin/assign-worker-group",
+    data
+  );
+
+  return response.data;
+}
