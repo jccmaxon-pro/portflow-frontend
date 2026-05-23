@@ -3,6 +3,7 @@ import { simulateAppointmentBlock } from "../api/appointmentSimulationApi";
 import NominationViewer from "../components/appointments/NominationViewer";
 import "./SimulationPage.css";
 
+
 function SimulationPage() {
   const [simulationData, setSimulationData] = useState(null);
   const [loading, setLoading] = useState(false);

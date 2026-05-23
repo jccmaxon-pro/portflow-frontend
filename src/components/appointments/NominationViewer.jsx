@@ -7,6 +7,22 @@ import {
 } from "../../utils/nominationFormatter";
 
 
+const formatDate = (dateValue) => {
+  if (!dateValue) {
+    return "-";
+  }
+
+  const date = new Date(dateValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(dateValue);
+  }
+
+  return date.toLocaleDateString("es-ES");
+};
+
+
+
 
 function getCoverageClass(type) {
   const classes = {
@@ -299,8 +315,97 @@ function WorkRequestCard({ entry }) {
   );
 }
 
+function RestExclusionsBox({ restExclusions = [] }) {
+  if (!Array.isArray(restExclusions) || restExclusions.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-3xl border border-blue-200 bg-blue-50 p-6 shadow-sm">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-xl font-black text-slate-950">
+            Trabajadores excluidos por descanso anual
+          </h2>
+
+          <p className="mt-1 text-sm font-semibold text-slate-600">
+            Estos trabajadores tenían descanso seleccionado y el motor no los ha nombrado.
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-white px-4 py-3 text-center shadow-sm">
+          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+            Excluidos
+          </p>
+
+          <p className="text-3xl font-black text-blue-700">
+            {restExclusions.length}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-5 overflow-x-auto rounded-2xl border border-blue-100 bg-white">
+        <table className="min-w-full text-sm">
+          <thead className="bg-slate-50 text-left text-xs font-black uppercase tracking-wide text-slate-500">
+            <tr>
+              <th className="px-4 py-3">Fecha</th>
+              <th className="px-4 py-3">Trabajador</th>
+              <th className="px-4 py-3">Grupo profesional</th>
+              <th className="px-4 py-3">Grupo descanso</th>
+              <th className="px-4 py-3">Bloque</th>
+              <th className="px-4 py-3">Motivo</th>
+            </tr>
+          </thead>
+
+          <tbody className="divide-y divide-slate-100">
+            {restExclusions.map((item, index) => (
+              <tr key={`${item.workerId || "worker"}-${item.date || "date"}-${index}`}>
+                <td className="px-4 py-3 font-black text-slate-950">
+                  {formatDate(item.date)}
+                </td>
+
+                <td className="px-4 py-3">
+                  <div className="font-black text-slate-950">
+                    {item.workerCode || "-"} · {item.fullName || "-"}
+                  </div>
+                </td>
+
+                <td className="px-4 py-3 font-bold text-slate-700">
+                  {item.mainProfessionalGroup || "-"}
+                </td>
+
+                <td className="px-4 py-3 font-bold text-slate-700">
+                  {item.restGroupCode || "-"}
+                </td>
+
+                <td className="px-4 py-3 font-semibold text-slate-600">
+                  {item.blockLabel || item.blockCode || "-"}
+                </td>
+
+                <td className="px-4 py-3">
+                  <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-black text-blue-800">
+                    Descanso anual
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function NominationViewer({ simulationData, data }) {
-  const result = simulationData || data;
+  const result =
+  simulationData?.data?.result ||
+  simulationData?.data ||
+  simulationData?.result ||
+  simulationData;
+
+  console.log("NOMINATION VIEWER - simulationData:", simulationData);
+  console.log("NOMINATION VIEWER - result:", result);
+  console.log("NOMINATION VIEWER - restExclusions:", result?.restExclusions);
 
   if (!result) {
     return (
@@ -431,6 +536,8 @@ export default function NominationViewer({ simulationData, data }) {
           </div>
         </div>
       </div>
+
+      <RestExclusionsBox restExclusions={result?.restExclusions || []} />
 
       {blocks.map((block,index) => (
         <div key={`${block.blockLabel}-${index}`} className="space-y-4">
