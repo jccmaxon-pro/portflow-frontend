@@ -42,7 +42,7 @@ export async function getAdminRestGroups(params = {}) {
 }
 
 export async function getAdminRestGroupAssignments(params = {}) {
-  const response = await apiClient.get(
+  const response = await apiClient.get( 
     "/worker-rest/admin/group-assignments",
     {
       params,
@@ -65,6 +65,17 @@ export async function assignWorkerToRestGroup(data = {}) {
   const response = await apiClient.post(
     "/worker-rest/admin/assign-worker-group",
     data
+  );
+
+  return response.data;
+}
+
+export async function getAdminRestGroupChangeLogs(params = {}) {
+  const response = await apiClient.get(
+    "/worker-rest/admin/group-change-logs",
+    {
+      params,
+    }
   );
 
   return response.data;

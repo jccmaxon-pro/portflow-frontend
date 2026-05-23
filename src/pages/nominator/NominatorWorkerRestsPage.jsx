@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   assignWorkerToRestGroup,
   getAdminRestGroupAssignments,
+  getAdminRestGroupChangeLogs,
   getAdminRestGroups,
   getAdminRestSelections,
   moveWorkerRestGroup,
@@ -613,6 +614,161 @@ function AssignWorkerGroupForm({
   );
 }
 
+function RestGroupChangeLogsTable({
+  logs,
+  summary,
+  loading,
+  restGroups,
+  workerCode,
+  setWorkerCode,
+  newGroupCode,
+  setNewGroupCode,
+  onSearch,
+  onClear,
+}) {
+  return (
+    <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-black uppercase tracking-wide text-slate-500">
+            Auditoría
+          </p>
+
+          <h3 className="mt-1 text-2xl font-black text-slate-950">
+            Cambios de grupo de descanso
+          </h3>
+
+          <p className="mt-2 max-w-3xl text-sm text-slate-600">
+            Registro de movimientos de trabajadores entre grupos de descanso.
+            Sirve para saber quién hizo el cambio, cuándo y por qué.
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-slate-100 px-4 py-3 text-sm font-black text-slate-700">
+          {summary?.totalLogs || 0} cambio/s
+        </div>
+      </div>
+
+      <div className="mb-5 grid gap-3 md:grid-cols-[1fr_1.4fr_auto_auto]">
+        <input
+          type="text"
+          value={workerCode}
+          onChange={(event) => setWorkerCode(event.target.value)}
+          className="rounded-2xl border border-slate-300 px-4 py-3 font-bold text-slate-900"
+          placeholder="Filtrar por nº trabajador"
+        />
+
+        <select
+          value={newGroupCode}
+          onChange={(event) => setNewGroupCode(event.target.value)}
+          className="rounded-2xl border border-slate-300 px-4 py-3 font-bold text-slate-900"
+        >
+          <option value="">Grupo destino</option>
+
+          {restGroups.map((group) => (
+            <option key={group.code} value={group.code}>
+              {group.name}
+            </option>
+          ))}
+        </select>
+
+        <button
+          type="button"
+          onClick={onSearch}
+          className="rounded-2xl bg-slate-950 px-5 py-3 font-black text-white hover:bg-slate-700"
+        >
+          Filtrar
+        </button>
+
+        <button
+          type="button"
+          onClick={onClear}
+          className="rounded-2xl bg-slate-100 px-5 py-3 font-black text-slate-700 hover:bg-slate-200"
+        >
+          Limpiar
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="rounded-2xl bg-slate-50 p-5 font-bold text-slate-500">
+          Cargando auditoría...
+        </div>
+      ) : logs.length === 0 ? (
+        <div className="rounded-2xl bg-slate-50 p-5 text-slate-500">
+          No hay cambios de grupo registrados con los filtros actuales.
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-slate-200">
+          <table className="w-full min-w-[1050px] border-collapse bg-white">
+            <thead>
+              <tr className="bg-slate-50 text-left text-xs font-black uppercase tracking-wide text-slate-500">
+                <th className="px-4 py-3">Fecha</th>
+                <th className="px-4 py-3">Trabajador</th>
+                <th className="px-4 py-3">Grupo anterior</th>
+                <th className="px-4 py-3">Grupo nuevo</th>
+                <th className="px-4 py-3">Usuario</th>
+                <th className="px-4 py-3">Motivo</th>
+                <th className="px-4 py-3">Notas</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {logs.map((log) => (
+                <tr
+                  key={log._id}
+                  className="border-t border-slate-100 align-top"
+                >
+                  <td className="px-4 py-3 text-sm font-bold text-slate-700">
+                    {log.createdAt
+                      ? new Date(log.createdAt).toLocaleString("es-ES")
+                      : "-"}
+                  </td>
+
+                  <td className="px-4 py-3">
+                    <div className="font-black text-slate-950">
+                      {log.worker?.workerCode || "-"}
+                    </div>
+                    <div className="text-xs font-bold text-slate-500">
+                      {log.worker?.fullName || ""}
+                    </div>
+                  </td>
+
+                  <td className="px-4 py-3 text-sm font-bold text-slate-700">
+                    {log.previousRestGroup?.name ||
+                      log.previousRestGroup?.code ||
+                      "-"}
+                  </td>
+
+                  <td className="px-4 py-3 text-sm font-black text-slate-900">
+                    {log.newRestGroup?.name || log.newRestGroup?.code || "-"}
+                  </td>
+
+                  <td className="px-4 py-3">
+                    <div className="text-sm font-bold text-slate-800">
+                      {log.changedBy?.name || log.changedBy?.email || "-"}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {log.changedBy?.role || ""}
+                    </div>
+                  </td>
+
+                  <td className="px-4 py-3 text-sm text-slate-700">
+                    {log.reason || "-"}
+                  </td>
+
+                  <td className="max-w-xs px-4 py-3 text-sm text-slate-600">
+                    {log.notes || "-"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function NominatorWorkerRestsPage({ currentUser }) {
   const [year, setYear] = useState(2026);
   const [date, setDate] = useState("");
@@ -636,6 +792,12 @@ export default function NominatorWorkerRestsPage({ currentUser }) {
   const [assignRestGroupCode, setAssignRestGroupCode] = useState("");
   const [assignNotes, setAssignNotes] = useState("");
   const [assignLoading, setAssignLoading] = useState(false);
+
+  const [changeLogs, setChangeLogs] = useState([]);
+  const [changeLogsSummary, setChangeLogsSummary] = useState(null);
+  const [changeLogsLoading, setChangeLogsLoading] = useState(false);
+  const [changeLogsWorkerCode, setChangeLogsWorkerCode] = useState("");
+  const [changeLogsNewGroupCode, setChangeLogsNewGroupCode] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [restData, setRestData] = useState(null);
@@ -836,6 +998,7 @@ export default function NominatorWorkerRestsPage({ currentUser }) {
     }
   }
 
+
   async function handleAssignWorkerSubmit(event) {
     event.preventDefault();
 
@@ -891,6 +1054,7 @@ export default function NominatorWorkerRestsPage({ currentUser }) {
       }
 
       await loadSelections();
+      await loadChangeLogs();
     } catch (error) {
       setErrorMessage(
         error.response?.data?.message ||
@@ -928,9 +1092,45 @@ export default function NominatorWorkerRestsPage({ currentUser }) {
     }
   }
 
+  async function loadChangeLogs(customFilters = {}) {
+    try {
+      setChangeLogsLoading(true);
+      setErrorMessage("");
+
+      const params = {
+        year,
+        ...customFilters,
+      };
+
+      if (currentUser?.role === "SUPER_ADMIN") {
+        params.portId = currentUser?.port?._id || DEFAULT_PORT_ID;
+      }
+
+      const result = await getAdminRestGroupChangeLogs(params);
+
+      if (!result.success) {
+        throw new Error(
+          result.message || "No se pudo cargar la auditoría de cambios"
+        );
+      }
+
+      setChangeLogs(result.data?.logs || []);
+      setChangeLogsSummary(result.data?.summary || null);
+    } catch (error) {
+      setErrorMessage(
+        error.response?.data?.message ||
+          error.message ||
+          "Error cargando auditoría de cambios"
+      );
+    } finally {
+      setChangeLogsLoading(false);
+    }
+  }               
+
   useEffect(() => {
     loadRestGroups();
     loadSelections();
+    loadChangeLogs();
   }, []);
 
   useEffect(() => {
@@ -1271,6 +1471,28 @@ export default function NominatorWorkerRestsPage({ currentUser }) {
               moveLoading={moveLoading}
               onSubmit={handleMoveWorkerSubmit}
               onCancel={closeMoveWorkerForm}
+            />
+
+            <RestGroupChangeLogsTable
+              logs={changeLogs}
+              summary={changeLogsSummary}
+              loading={changeLogsLoading}
+              restGroups={restGroups}
+              workerCode={changeLogsWorkerCode}
+              setWorkerCode={setChangeLogsWorkerCode}
+              newGroupCode={changeLogsNewGroupCode}
+              setNewGroupCode={setChangeLogsNewGroupCode}
+              onSearch={() => {
+                loadChangeLogs({
+                  workerCode: changeLogsWorkerCode.trim() || undefined,
+                  newRestGroupCode: changeLogsNewGroupCode || undefined,
+                });
+              }}
+              onClear={() => {
+                setChangeLogsWorkerCode("");
+                setChangeLogsNewGroupCode("");
+                loadChangeLogs();
+              }}
             />
           </div>
         </div>
