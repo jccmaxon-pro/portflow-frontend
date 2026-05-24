@@ -403,10 +403,6 @@ export default function NominationViewer({ simulationData, data }) {
   simulationData?.result ||
   simulationData;
 
-  console.log("NOMINATION VIEWER - simulationData:", simulationData);
-  console.log("NOMINATION VIEWER - result:", result);
-  console.log("NOMINATION VIEWER - restExclusions:", result?.restExclusions);
-
   if (!result) {
     return (
         <section className="mt-8 rounded-3xl border border-slate-200 bg-white p-10 shadow-sm">
