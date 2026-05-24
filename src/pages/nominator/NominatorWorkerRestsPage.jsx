@@ -334,16 +334,6 @@ function RestGroupAssignmentsTable({
                       "-"}
                   </td>
 
-                  <td className="px-5 py-4 text-right">
-                    <button
-                        type="button"
-                        onClick={() => onMoveWorker(assignment)}
-                        className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white hover:bg-slate-700"
-                    >
-                        Mover
-                    </button>
-                  </td>
-
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-2">
                       <span
@@ -361,6 +351,16 @@ function RestGroupAssignmentsTable({
                         </div>
                       </div>
                     </div>
+                  </td>
+
+                  <td className="px-5 py-4 text-right">
+                    <button
+                      type="button"
+                      onClick={() => onMoveWorker(assignment)}
+                      className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white hover:bg-slate-700"
+                    >
+                      Mover
+                    </button>
                   </td>
                 </tr>
               );
@@ -1409,8 +1409,8 @@ export default function NominatorWorkerRestsPage({ currentUser }) {
 
               <p className="mt-2 max-w-3xl text-sm text-slate-600">
                 Consulta qué grupos de descanso existen y qué trabajadores tiene cada
-                uno asignado. Más adelante aquí podremos mover trabajadores entre
-                grupos y regenerar calendarios.
+                uno asignado. Desde aquí puedes añadir trabajadores nuevos a un grupo
+                o moverlos de grupo cuando proceda.
               </p>
             </div>
             <button

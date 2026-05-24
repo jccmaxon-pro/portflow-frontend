@@ -117,8 +117,6 @@ function SimulationPage() {
         ],
       };
 
-      console.log("PAYLOAD SIMULACIÓN:", payload);
-
       const result = await simulateAppointmentBlock(payload);
 
       if (!result.success) {
