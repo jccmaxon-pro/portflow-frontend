@@ -187,6 +187,7 @@ function PublishedRunCard({ nominationRun, highlightedWorkerCode }) {
 }
 
 export default function WorkerPortalPage({ currentUser }) {
+
   const [scope, setScope] = useState("today");
   const [workerView, setWorkerView] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -348,71 +349,76 @@ export default function WorkerPortalPage({ currentUser }) {
           </div>
         )}
 
-        {errorMessage && (
-          <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 p-4 font-bold text-red-700">
-            {errorMessage}
-          </div>
-        )}
-
-        {loading ? (
-          <div className="rounded-3xl border border-slate-200 bg-white p-8 font-bold text-slate-500 shadow-sm">
-            Cargando nombramientos publicados...
-          </div>
-        ) : (
-          <>
-            <div className="mb-6 grid gap-4 md:grid-cols-3">
-              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-                  Nombramientos publicados
-                </p>
-                <p className="mt-2 text-3xl font-black text-slate-950">
-                  {workerView?.summary?.publishedNominationRuns || 0}
-                </p>
-              </div>
-
-              <div className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
-                <p className="text-xs font-black uppercase tracking-wide text-blue-700">
-                  Mis asignaciones
-                </p>
-                <p className="mt-2 text-3xl font-black text-blue-800">
-                  {workerView?.summary?.ownAssignments || 0}
-                </p>
-              </div>
-
-              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-                  Nº trabajador
-                </p>
-                <p className="mt-2 text-3xl font-black text-slate-950">
-                  {workerCode || currentUser?.worker?.workerCode || "-"}
-                </p>
-              </div>
-            </div>
-
-            <div className="mb-6">
-              <AssignmentSummaryTable assignments={summaryAssignments} />
-            </div>
-
-            {publishedRuns.length === 0 ? (
-              <div className="rounded-3xl border border-slate-200 bg-white p-8 text-slate-500 shadow-sm">
-                No hay nombramientos publicados en este rango.
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {publishedRuns.map((nominationRun) => (
-                  <PublishedRunCard
-                    key={nominationRun._id}
-                    nominationRun={nominationRun}
-                    highlightedWorkerCode={
-                      workerCode || currentUser?.worker?.workerCode
-                    }
-                  />
-                ))}
+        
+            {errorMessage && (
+              <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 p-4 font-bold text-red-700">
+                {errorMessage}
               </div>
             )}
-          </>
-        )}
+
+            {loading ? (
+              <div className="rounded-3xl border border-slate-200 bg-white p-8 font-bold text-slate-500 shadow-sm">
+                Cargando nombramientos publicados...
+              </div>
+            ) : (
+              <>
+                <div className="mb-6 grid gap-4 md:grid-cols-3">
+                  <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                      Nombramientos publicados
+                    </p>
+                    <p className="mt-2 text-3xl font-black text-slate-950">
+                      {workerView?.summary?.publishedNominationRuns || 0}
+                    </p>
+                  </div>
+
+                  <div className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
+                    <p className="text-xs font-black uppercase tracking-wide text-blue-700">
+                      Mis asignaciones
+                    </p>
+                    <p className="mt-2 text-3xl font-black text-blue-800">
+                      {workerView?.summary?.ownAssignments || 0}
+                    </p>
+                  </div>
+
+                  <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                      Nº trabajador
+                    </p>
+                    <p className="mt-2 text-3xl font-black text-slate-950">
+                      {workerCode || currentUser?.worker?.workerCode || "-"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mb-6">
+                  <AssignmentSummaryTable assignments={summaryAssignments} />
+                </div>
+
+                {publishedRuns.length === 0 ? (
+                  <div className="rounded-3xl border border-slate-200 bg-white p-8 text-slate-500 shadow-sm">
+                    No hay nombramientos publicados en este rango.
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {publishedRuns.map((nominationRun) => (
+                      <PublishedRunCard
+                        key={nominationRun._id}
+                        nominationRun={nominationRun}
+                        highlightedWorkerCode={
+                          workerCode || currentUser?.worker?.workerCode
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
       </section>
+
     </main>
+
   );
+
 }

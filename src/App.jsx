@@ -6,6 +6,7 @@ import CompanyWorkRequestsPage from "./pages/company/CompanyWorkRequestsPage";
 import WorkerRestPage from "./pages/worker/WorkerRestPage";
 import NominatorWorkerRestsPage from "./pages/nominator/NominatorWorkerRestsPage";
 import WorkerPortalPage from "./pages/worker/WorkerPortalPage";
+import WorkerDoublePage from "./pages/worker/WorkerDoublePage";
 import {
   clearAuthToken,
   getAuthToken,
@@ -108,6 +109,10 @@ function buildMenuForUser(user) {
       {
         key: "workerRest",
         label: "Descansos",
+      },
+      {
+        key: "workerDoubles",
+        label: "Doblajes",
       },
       {
         key: "workerMonthlyTasks",
@@ -481,6 +486,10 @@ export default function App() {
 
       {currentPage === "workerRest" && (
         <WorkerRestPage currentUser={currentUser} />
+      )}
+
+      {currentPage === "workerDoubles" && (
+        <WorkerDoublePage currentUser={currentUser} />
       )}
 
       {currentPage === "workerMonthlyTasks" && (
