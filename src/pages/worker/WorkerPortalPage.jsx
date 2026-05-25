@@ -144,6 +144,7 @@ function PublishedRunCard({ nominationRun, highlightedWorkerCode }) {
       <NominationVisualResult
         simulationResult={nominationRun.result}
         highlightedWorkerCode={highlightedWorkerCode}
+        showRestExclusions={false}
       />
     </section>
   );

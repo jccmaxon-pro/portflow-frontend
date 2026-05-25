@@ -312,6 +312,7 @@ function RestExclusionsBox({ restExclusions = [] }) {
 export default function NominationVisualResult({
   simulationResult,
   highlightedWorkerCode = null,
+  showRestExclusions = true,
 }) {
   if (!simulationResult) {
     return null;
@@ -345,7 +346,10 @@ export default function NominationVisualResult({
           <Legend highlightedWorkerCode={highlightedWorkerCode} />
         </div>
       </div>
-      <RestExclusionsBox restExclusions={restExclusions} />
+      
+      {showRestExclusions && (
+        <RestExclusionsBox restExclusions={restExclusions} />
+      )}
       {blocks.length === 0 ? (
         <div className="rounded-3xl border border-slate-200 bg-white p-6 text-slate-500">
           No hay bloques de nombramiento para mostrar.
