@@ -5,11 +5,15 @@ import NominationVisualResult from "../../components/nomination/NominationVisual
 const SCOPE_OPTIONS = [
   {
     value: "today",
-    label: "Nombramiento de hoy",
+    label: "De hoy",
   },
   {
     value: "future",
     label: "Hoy en adelante",
+  },
+  {
+    value: "history",
+    label: "Histórico",
   },
 ];
 
@@ -35,11 +39,43 @@ function formatShift(shiftCode) {
   return shiftCode.replace("_", " A ");
 }
 
+function getTodayInputValue() {
+  const today = new Date();
+
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getFirstDayOfCurrentMonth() {
+  const today = new Date();
+
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+
+  return `${year}-${month}-01`;
+}
+
+function getLastDayOfCurrentMonth() {
+  const today = new Date();
+
+  const year = today.getFullYear();
+  const month = today.getMonth();
+
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const safeMonth = String(month + 1).padStart(2, "0");
+  const safeDay = String(lastDay).padStart(2, "0");
+
+  return `${year}-${safeMonth}-${safeDay}`;
+}
+
 function AssignmentSummaryTable({ assignments }) {
   if (!assignments || assignments.length === 0) {
     return (
       <div className="rounded-3xl border border-slate-200 bg-white p-6 text-slate-500 shadow-sm">
-        No tienes asignaciones propias en el rango seleccionado.
+        No tienes asignaciones propias en el rango seleccionado. Si hay nombramientos publicados, podrás verlos completos debajo.
       </div>
     );
   }
@@ -155,6 +191,13 @@ export default function WorkerPortalPage({ currentUser }) {
   const [workerView, setWorkerView] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  const [historyFromDate, setHistoryFromDate] = useState(
+    getFirstDayOfCurrentMonth()
+  );
+  const [historyToDate, setHistoryToDate] = useState(
+    getLastDayOfCurrentMonth()
+  );
+
   const [errorMessage, setErrorMessage] = useState("");
 
   const workerCode = workerView?.worker?.workerCode;
@@ -172,9 +215,16 @@ export default function WorkerPortalPage({ currentUser }) {
       setLoading(true);
       setErrorMessage("");
 
-      const result = await getWorkerNominationView({
+      const params = {
         scope: nextScope,
-      });
+      };
+
+      if (nextScope === "history") {
+        params.fromDate = historyFromDate;
+        params.toDate = historyToDate;
+      }
+
+      const result = await getWorkerNominationView(params);
 
       if (!result.success) {
         throw new Error(result.message || "No se pudo cargar el portal trabajador");
@@ -251,6 +301,52 @@ export default function WorkerPortalPage({ currentUser }) {
             );
           })}
         </div>
+
+        {scope === "history" && (
+          <div className="mb-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
+              <div>
+                <label className="block text-sm font-black text-slate-700">
+                  Desde
+                </label>
+
+                <input
+                  type="date"
+                  value={historyFromDate}
+                  onChange={(event) => setHistoryFromDate(event.target.value)}
+                  className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-900 outline-none focus:border-slate-950"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-black text-slate-700">
+                  Hasta
+                </label>
+
+                <input
+                  type="date"
+                  value={historyToDate}
+                  onChange={(event) => setHistoryToDate(event.target.value)}
+                  className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-900 outline-none focus:border-slate-950"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => loadWorkerView("history")}
+                className="rounded-2xl bg-slate-950 px-6 py-3 font-black text-white shadow hover:bg-slate-700"
+              >
+                Buscar
+              </button>
+            </div>
+
+            <p className="mt-3 text-sm font-semibold text-slate-500">
+              Se mostrarán los nombramientos completos publicados en el rango,
+              salgas o no salgas nombrado. Tus asignaciones aparecerán
+              resumidas arriba.
+            </p>
+          </div>
+        )}
 
         {errorMessage && (
           <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 p-4 font-bold text-red-700">
