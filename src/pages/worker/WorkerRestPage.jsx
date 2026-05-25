@@ -240,7 +240,13 @@ function getDayStatusLabel(restDay) {
   return "Disponible";
 }
 
-function SummaryCard({ label, value, tone = "default" }) {
+function SummaryCard({
+  label,
+  value,
+  tone = "default",
+  valueSize = "normal",
+  title = "",
+}) {
   const toneClass =
     tone === "blue"
       ? "border-blue-200 bg-blue-50 text-blue-800"
@@ -250,13 +256,23 @@ function SummaryCard({ label, value, tone = "default" }) {
       ? "border-amber-200 bg-amber-50 text-amber-800"
       : "border-slate-200 bg-white text-slate-950";
 
+  const valueClass =
+    valueSize === "small"
+      ? "text-xl break-words leading-tight"
+      : "text-3xl";
+
   return (
     <div className={`rounded-3xl border p-5 shadow-sm ${toneClass}`}>
       <p className="text-xs font-black uppercase tracking-wide opacity-70">
         {label}
       </p>
 
-      <p className="mt-2 text-3xl font-black">{value}</p>
+      <p
+        title={title || String(value || "")}
+        className={`mt-2 font-black ${valueClass}`}
+      >
+        {value}
+      </p>
     </div>
   );
 }
@@ -875,7 +891,9 @@ export default function WorkerRestPage({ currentUser }) {
             <div className="grid gap-4 md:grid-cols-4">
               <SummaryCard
                 label="Grupo descanso"
-                value={calendar.restGroup?.code || "-"}
+                value={calendar.restGroup?.name || calendar.restGroup?.code || "-"}
+                title={calendar.restGroup?.code || calendar.restGroup?.name || "-"}
+                valueSize="small"
               />
 
               <SummaryCard
