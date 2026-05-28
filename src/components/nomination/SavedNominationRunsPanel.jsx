@@ -16,6 +16,46 @@ const STATUS_LABELS = {
   CANCELLED: "Anulado",
 };
 
+const OPERATIONAL_STATUS_LABELS = {
+  OK: "Estado correcto",
+  CURRENT: "Estado correcto",
+  NEEDS_REVIEW: "Revisar",
+  INVALIDATED: "Invalidado",
+};
+
+function getOperationalStatusLabel(operationalStatus) {
+  return (
+    OPERATIONAL_STATUS_LABELS[operationalStatus] ||
+    operationalStatus ||
+    "Estado correcto"
+  );
+}
+
+function OperationalStatusBadge({ operationalStatus }) {
+  if (!operationalStatus || ["OK", "CURRENT"].includes(operationalStatus)) {
+    return (
+      <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-emerald-700 ring-1 ring-emerald-200">
+        Estado correcto
+      </span>
+    );
+  }
+
+  const statusClass =
+    operationalStatus === "NEEDS_REVIEW"
+      ? "bg-amber-100 text-amber-900 ring-amber-200"
+      : operationalStatus === "INVALIDATED"
+      ? "bg-red-100 text-red-800 ring-red-200"
+      : "bg-slate-100 text-slate-700 ring-slate-200";
+
+  return (
+    <span
+      className={`inline-flex rounded-full px-3 py-1 text-xs font-black uppercase tracking-wide ring-1 ${statusClass}`}
+    >
+      {getOperationalStatusLabel(operationalStatus)}
+    </span>
+  );
+}
+
 const STATUS_FILTERS = [
   { value: "", label: "Todos" },
   { value: "DRAFT", label: "Borradores" },
@@ -89,9 +129,15 @@ function SelectedNominationRunDetail({
     return null;
   }
 
-  const canPublish = selectedRun.status === "DRAFT";
+  
+  const canPublish =
+    selectedRun.status === "DRAFT" &&
+    selectedRun.operationalStatus !== "INVALIDATED";
   const canCancel = selectedRun.status !== "CLOSED";
   const isSaving = savingId === selectedRun._id;
+
+  const needsOperationalReview =
+  selectedRun.operationalStatus === "NEEDS_REVIEW";
 
   return (
     <section className="mt-6 rounded-3xl border border-slate-300 bg-slate-50 p-5 shadow-sm">
@@ -105,12 +151,15 @@ function SelectedNominationRunDetail({
             {selectedRun.windowName}
           </h3>
 
-          <div className="mt-2 flex flex-wrap gap-2 text-sm font-bold text-slate-600">
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm font-bold text-slate-600">
             <span>{formatDate(selectedRun.workDate)}</span>
             <span>·</span>
             <span>{selectedRun.windowCode}</span>
             <span>·</span>
             <StatusBadge status={selectedRun.status} />
+            <OperationalStatusBadge
+              operationalStatus={selectedRun.operationalStatus}
+            />
           </div>
 
           <div className="mt-3 text-sm text-slate-500">
@@ -162,7 +211,20 @@ function SelectedNominationRunDetail({
           </button>
         </div>
       </div>
+      {needsOperationalReview && (
+        <div className="mb-5 rounded-3xl border border-amber-300 bg-amber-50 p-5 text-amber-900 shadow-sm">
+          <div className="text-sm font-black uppercase tracking-wide">
+            Nombramiento pendiente de revisión
+          </div>
 
+          <p className="mt-2 text-sm font-bold leading-6">
+            Este nombramiento dependía de una ventana anterior que ha sido anulada.
+            El estado operativo anterior ya no es válido, por lo que deberías volver
+            a simular esta ventana y publicarla de nuevo antes de usarla como
+            nombramiento definitivo.
+          </p>
+        </div>
+      )}        
       <NominationVisualResult simulationResult={selectedRun.result} />
     </section>
   );
@@ -394,6 +456,7 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
                 <th className="px-5 py-4">Fecha</th>
                 <th className="px-5 py-4">Ventana</th>
                 <th className="px-5 py-4">Estado</th>
+                <th className="px-5 py-4">Estado operativo</th>
                 <th className="px-5 py-4">Resumen</th>
                 <th className="px-5 py-4">Creado por</th>
                 <th className="px-5 py-4 text-right">Acciones</th>
@@ -404,14 +467,18 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
               {nominationRuns.map((nominationRun) => {
                 const isSaving = savingId === nominationRun._id;
                 const isLoadingDetail = loadingDetailId === nominationRun._id;
-                const canPublish = nominationRun.status === "DRAFT";
+                const canPublish =
+                  nominationRun.status === "DRAFT" &&
+                  nominationRun.operationalStatus !== "INVALIDATED";
                 const canCancel = nominationRun.status !== "CLOSED";
 
                 return (
                   <tr
                     key={nominationRun._id}
                     className={`border-t border-slate-100 ${
-                      selectedRun?._id === nominationRun._id
+                      nominationRun.operationalStatus === "NEEDS_REVIEW"
+                        ? "bg-amber-50"
+                        : selectedRun?._id === nominationRun._id
                         ? "bg-slate-50"
                         : "bg-white"
                     }`}
@@ -431,6 +498,12 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
 
                     <td className="px-5 py-4">
                       <StatusBadge status={nominationRun.status} />
+                    </td>
+
+                    <td className="px-5 py-4">
+                      <OperationalStatusBadge
+                        operationalStatus={nominationRun.operationalStatus}
+                      />
                     </td>
 
                     <td className="px-5 py-4 text-sm text-slate-700">
