@@ -118,6 +118,262 @@ function StatusBadge({ status }) {
   );
 }
 
+const CHANGEABLE_STATUS_LABELS = {
+  PENDING_CONFIRMATION: "Pendiente de confirmación",
+  CONFIRMED: "Confirmado",
+  CANCELLED: "Cancelado",
+  REDUCED: "Reducido",
+  MODIFIED: "Modificado",
+};
+
+function getChangeableStatusLabel(status) {
+  return (
+    CHANGEABLE_STATUS_LABELS[status] ||
+    status ||
+    "Pendiente de confirmación"
+  );
+}
+
+function ChangeableStatusBadge({ status }) {
+  const normalizedStatus = status || "PENDING_CONFIRMATION";
+
+  const statusClass =
+    normalizedStatus === "CONFIRMED"
+      ? "bg-emerald-100 text-emerald-800 ring-emerald-200"
+      : normalizedStatus === "CANCELLED"
+      ? "bg-red-100 text-red-800 ring-red-200"
+      : normalizedStatus === "REDUCED"
+      ? "bg-orange-100 text-orange-900 ring-orange-200"
+      : normalizedStatus === "MODIFIED"
+      ? "bg-indigo-100 text-indigo-800 ring-indigo-200"
+      : "bg-amber-100 text-amber-900 ring-amber-200";
+
+  return (
+    <span
+      className={`inline-flex rounded-full px-3 py-1 text-xs font-black uppercase tracking-wide ring-1 ${statusClass}`}
+    >
+      {getChangeableStatusLabel(normalizedStatus)}
+    </span>
+  );
+}
+
+function getWorkRequestId(workRequest) {
+  return String(workRequest?._id || workRequest?.id || "");
+}
+
+function getBerthName(workRequest) {
+  if (typeof workRequest?.berth === "string") {
+    return workRequest.berth;
+  }
+
+  return (
+    workRequest?.berth?.name ||
+    workRequest?.berth?.code ||
+    workRequest?.berthName ||
+    "-"
+  );
+}
+
+function getChangeableWorkRequestsFromRun(nominationRun) {
+  const workRequests = nominationRun?.result?.workRequests || [];
+
+  if (!Array.isArray(workRequests)) {
+    return [];
+  }
+
+  return workRequests.filter((workRequest) => {
+    const status = String(workRequest?.status || "").toUpperCase();
+
+    return status === "CHANGEABLE";
+  });
+}
+
+function getAssignmentsForWorkRequest(nominationRun, workRequest) {
+  const assignments = nominationRun?.result?.assignments || [];
+  const workRequestId = getWorkRequestId(workRequest);
+
+  if (!Array.isArray(assignments) || !workRequestId) {
+    return [];
+  }
+
+  return assignments.filter((assignment) => {
+    const assignmentWorkRequestId = String(
+      assignment?.workRequestId ||
+        assignment?.workRequest ||
+        assignment?.workRequest?._id ||
+        ""
+    );
+
+    if (assignmentWorkRequestId && assignmentWorkRequestId === workRequestId) {
+      return true;
+    }
+
+    const sameShip =
+      assignment?.shipName &&
+      workRequest?.shipName &&
+      assignment.shipName === workRequest.shipName;
+
+    const sameShift =
+      assignment?.shiftCode &&
+      workRequest?.shiftCode &&
+      assignment.shiftCode === workRequest.shiftCode;
+
+    return Boolean(sameShip && sameShift);
+  });
+}
+
+function buildPositionSummary(assignments) {
+  const summaryByPosition = {};
+
+  for (const assignment of assignments || []) {
+    const positionCode = assignment?.positionCode || "SIN_PUESTO";
+
+    summaryByPosition[positionCode] =
+      (summaryByPosition[positionCode] || 0) + 1;
+  }
+
+  return Object.entries(summaryByPosition)
+    .sort(([positionA], [positionB]) => positionA.localeCompare(positionB))
+    .map(([positionCode, total]) => `${positionCode}: ${total}`)
+    .join(" · ");
+}
+
+function ChangeableWorkRequestsPanel({ selectedRun }) {
+  const changeableWorkRequests = getChangeableWorkRequestsFromRun(selectedRun);
+
+  if (changeableWorkRequests.length === 0) {
+    return null;
+  }
+
+  const canManageChangeables = selectedRun.status === "PUBLISHED";
+
+  return (
+    <div className="mb-5 rounded-3xl border border-amber-300 bg-amber-50 p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="text-sm font-black uppercase tracking-wide text-amber-900">
+            Trabajos susceptibles de cambio
+          </div>
+
+          <p className="mt-2 max-w-4xl text-sm font-bold leading-6 text-amber-900">
+            Estos trabajos se publicaron como provisionales. Antes de nombrar la
+            siguiente ventana, deberían confirmarse, reducirse, modificarse o
+            cancelarse para que el estado operativo final sea correcto.
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-white px-4 py-3 text-sm font-black text-amber-900 shadow-sm ring-1 ring-amber-200">
+          {changeableWorkRequests.length} susceptible
+          {changeableWorkRequests.length === 1 ? "" : "s"}
+        </div>
+      </div>
+
+      <div className="mt-5 space-y-3">
+        {changeableWorkRequests.map((workRequest, index) => {
+          const assignments = getAssignmentsForWorkRequest(
+            selectedRun,
+            workRequest
+          );
+
+          const positionSummary = buildPositionSummary(assignments);
+
+          const changeableStatus =
+            workRequest.changeableStatus ||
+            workRequest.confirmationStatus ||
+            "PENDING_CONFIRMATION";
+
+          return (
+            <div
+              key={getWorkRequestId(workRequest) || index}
+              className="rounded-3xl border border-amber-200 bg-white p-4 shadow-sm"
+            >
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="text-lg font-black text-slate-950">
+                      {workRequest.shipName || "Barco sin nombre"}
+                    </h4>
+
+                    <ChangeableStatusBadge status={changeableStatus} />
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm font-bold text-slate-600">
+                    <span>Turno: {workRequest.shiftCode || "-"}</span>
+                    <span>Muelle: {getBerthName(workRequest)}</span>
+                    <span>
+                      Tarea:{" "}
+                      {workRequest.taskName ||
+                        workRequest.taskCode ||
+                        "Sin tarea"}
+                    </span>
+                    <span>
+                      Empresa: {workRequest.requestingCompanyName || "-"}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 text-sm text-slate-700">
+                    <span className="font-black">
+                      Trabajadores asignados provisionalmente:
+                    </span>{" "}
+                    {assignments.length}
+                  </div>
+
+                  {positionSummary && (
+                    <div className="mt-1 text-sm font-bold text-slate-600">
+                      {positionSummary}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap justify-start gap-2 lg:justify-end lg:whitespace-nowrap">
+                  <button
+                    type="button"
+                    disabled={!canManageChangeables}
+                    className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Confirmar completo
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={!canManageChangeables}
+                    className="rounded-xl bg-orange-50 px-3 py-2 text-xs font-black text-orange-800 ring-1 ring-orange-100 hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Reducir
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={!canManageChangeables}
+                    className="rounded-xl bg-indigo-50 px-3 py-2 text-xs font-black text-indigo-700 ring-1 ring-indigo-100 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Cambiar horario
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={!canManageChangeables}
+                    className="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-700 ring-1 ring-red-100 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+
+              {!canManageChangeables && (
+                <div className="mt-3 rounded-2xl bg-slate-50 p-3 text-xs font-bold text-slate-500">
+                  Las acciones de susceptible solo estarán disponibles cuando el
+                  nombramiento esté publicado.
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function SelectedNominationRunDetail({
   selectedRun,
   onClose,
@@ -225,6 +481,8 @@ function SelectedNominationRunDetail({
           </p>
         </div>
       )}        
+      <ChangeableWorkRequestsPanel selectedRun={selectedRun} />
+
       <NominationVisualResult simulationResult={selectedRun.result} />
     </section>
   );
