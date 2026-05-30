@@ -5,6 +5,7 @@ import {
   getNominationRunById,
   getNominationRuns,
   publishNominationRun,
+  cancelChangeableWorkRequest,
   resetChangeableWorkRequestDecision,
 } from "../../api/nominationRunApi";
 import NominationVisualResult from "./NominationVisualResult";
@@ -124,9 +125,9 @@ const CHANGEABLE_STATUS_LABELS = {
   PENDING_CONFIRMATION: "Pendiente de confirmación",
   CONFIRMED: "Confirmado completo",
   CONFIRMED_FULL: "Confirmado completo",
-  CANCELLED: "Cancelado",
-  REDUCED: "Reducido",
-  MODIFIED: "Modificado",
+  CANCELLED: "Trabajo cancelado",
+  REDUCED: "Trabajo reducido",
+  MODIFIED: "Horario modificado",
 };
 
 function getChangeableStatusLabel(status) {
@@ -308,6 +309,7 @@ function buildPositionSummary(assignments) {
 function ChangeableWorkRequestsPanel({
   selectedRun,
   onConfirmFullChangeable,
+  onCancelChangeable,
   onResetChangeableDecision,
   savingChangeableId,
 }) {
@@ -442,10 +444,21 @@ function ChangeableWorkRequestsPanel({
 
                   <button
                     type="button"
-                    disabled={!canUseMainActions || isSavingThisChangeable}
+                    disabled={
+                      !canUseMainActions ||
+                      !workRequestId ||
+                      isSavingThisChangeable
+                    }
+                    onClick={() =>
+                      onCancelChangeable({
+                        nominationRunId: selectedRun._id,
+                        workRequestId,
+                        shipName: workRequest.shipName,
+                      })
+                    }
                     className="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-700 ring-1 ring-red-100 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    Cancelar
+                    {isSavingThisChangeable ? "Cancelando..." : "Cancelar trabajo"}
                   </button>
 
                   {hasFinalDecision && (
@@ -491,6 +504,7 @@ function SelectedNominationRunDetail({
   onPublish,
   onCancel,
   onConfirmFullChangeable,
+  onCancelChangeable,
   onResetChangeableDecision,
   savingId,
   savingChangeableId,
@@ -598,6 +612,7 @@ function SelectedNominationRunDetail({
       <ChangeableWorkRequestsPanel
         selectedRun={selectedRun}
         onConfirmFullChangeable={onConfirmFullChangeable}
+        onCancelChangeable={onCancelChangeable}
         onResetChangeableDecision={onResetChangeableDecision}
         savingChangeableId={savingChangeableId}
       />
@@ -807,6 +822,57 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
         error.response?.data?.message ||
           error.message ||
           "Error confirmando trabajo susceptible"
+      );
+    } finally {
+      setSavingChangeableId(null);
+    }
+  }
+
+  async function handleCancelChangeableWorkRequest({
+    nominationRunId,
+    workRequestId,
+    shipName,
+  }) {
+    const confirmed = window.confirm(
+      `¿Seguro que quieres cancelar el trabajo susceptible${
+        shipName ? ` del barco ${shipName}` : ""
+      }? De momento solo se guardará la decisión. No se renombra todavía el nombramiento.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setSavingChangeableId(workRequestId);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      const result = await cancelChangeableWorkRequest({
+        nominationRunId,
+        workRequestId,
+      });
+
+      if (!result.success) {
+        throw new Error(
+          result.message || "No se pudo cancelar el trabajo susceptible"
+        );
+      }
+
+      setSuccessMessage("Trabajo susceptible cancelado correctamente");
+
+      const detailResult = await getNominationRunById(nominationRunId);
+
+      if (detailResult.success) {
+        setSelectedRun(detailResult.data);
+      }
+
+      await loadNominationRuns();
+    } catch (error) {
+      setErrorMessage(
+        error.response?.data?.message ||
+          error.message ||
+          "Error cancelando trabajo susceptible"
       );
     } finally {
       setSavingChangeableId(null);
@@ -1051,6 +1117,7 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
         onPublish={handlePublish}
         onCancel={handleCancel}
         onConfirmFullChangeable={handleConfirmFullChangeable}
+        onCancelChangeable={handleCancelChangeableWorkRequest}
         onResetChangeableDecision={handleResetChangeableDecision}
         savingId={savingId}
         savingChangeableId={savingChangeableId}

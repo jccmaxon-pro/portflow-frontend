@@ -55,3 +55,14 @@ export async function resetChangeableWorkRequestDecision({
 
   return response.data;
 }
+
+export async function cancelChangeableWorkRequest({
+  nominationRunId,
+  workRequestId,
+}) {
+  const response = await apiClient.patch(
+    `/nomination-runs/${nominationRunId}/changeables/${workRequestId}/cancel`
+  );
+
+  return response.data;
+}
