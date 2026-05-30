@@ -7,6 +7,7 @@ import {
   publishNominationRun,
   cancelChangeableWorkRequest,
   resetChangeableWorkRequestDecision,
+  reduceChangeableWorkRequest,
 } from "../../api/nominationRunApi";
 import NominationVisualResult from "./NominationVisualResult";
 
@@ -310,6 +311,7 @@ function ChangeableWorkRequestsPanel({
   selectedRun,
   onConfirmFullChangeable,
   onCancelChangeable,
+  onReduceChangeable,
   onResetChangeableDecision,
   savingChangeableId,
 }) {
@@ -428,10 +430,21 @@ function ChangeableWorkRequestsPanel({
 
                   <button
                     type="button"
-                    disabled={!canUseMainActions || isSavingThisChangeable}
+                    disabled={
+                      !canUseMainActions ||
+                      !workRequestId ||
+                      isSavingThisChangeable
+                    }
+                    onClick={() =>
+                      onReduceChangeable({
+                        nominationRunId: selectedRun._id,
+                        workRequestId,
+                        shipName: workRequest.shipName,
+                      })
+                    }
                     className="rounded-xl bg-orange-50 px-3 py-2 text-xs font-black text-orange-800 ring-1 ring-orange-100 hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    Reducir
+                    {isSavingThisChangeable ? "Reduciendo..." : "Reducir"}
                   </button>
 
                   <button
@@ -505,6 +518,7 @@ function SelectedNominationRunDetail({
   onCancel,
   onConfirmFullChangeable,
   onCancelChangeable,
+  onReduceChangeable,
   onResetChangeableDecision,
   savingId,
   savingChangeableId,
@@ -613,6 +627,7 @@ function SelectedNominationRunDetail({
         selectedRun={selectedRun}
         onConfirmFullChangeable={onConfirmFullChangeable}
         onCancelChangeable={onCancelChangeable}
+        onReduceChangeable={onReduceChangeable}
         onResetChangeableDecision={onResetChangeableDecision}
         savingChangeableId={savingChangeableId}
       />
@@ -879,6 +894,76 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
     }
   }
 
+  async function handleReduceChangeableWorkRequest({
+    nominationRunId,
+    workRequestId,
+    shipName,
+  }) {
+    const notes = window.prompt(
+      `Indica brevemente la reducción del trabajo susceptible${
+        shipName ? ` del barco ${shipName}` : ""
+      }.\n\nEjemplo: "De 3 manos pasa a 1 mano" o "Se reduce una mano".`
+    );
+
+    if (notes === null) {
+      return;
+    }
+
+    const cleanNotes = notes.trim();
+
+    if (!cleanNotes) {
+      setErrorMessage("Debes indicar una nota para la reducción");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `¿Seguro que quieres marcar este trabajo susceptible como reducido?\n\n${cleanNotes}\n\nDe momento solo se guardará la decisión. No se renombra todavía el nombramiento.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setSavingChangeableId(workRequestId);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      const result = await reduceChangeableWorkRequest({
+        nominationRunId,
+        workRequestId,
+        reduction: {
+          mode: "MANUAL_REDUCTION",
+          notes: cleanNotes,
+        },
+      });
+
+      if (!result.success) {
+        throw new Error(
+          result.message || "No se pudo reducir el trabajo susceptible"
+        );
+      }
+
+      setSuccessMessage("Trabajo susceptible reducido correctamente");
+
+      const detailResult = await getNominationRunById(nominationRunId);
+
+      if (detailResult.success) {
+        setSelectedRun(detailResult.data);
+      }
+
+      await loadNominationRuns();
+    } catch (error) {
+      setErrorMessage(
+        error.response?.data?.message ||
+          error.message ||
+          "Error reduciendo trabajo susceptible"
+      );
+    } finally {
+      setSavingChangeableId(null);
+    }
+  }
+
   async function handleResetChangeableDecision({
     nominationRunId,
     workRequestId,
@@ -1118,6 +1203,7 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
         onCancel={handleCancel}
         onConfirmFullChangeable={handleConfirmFullChangeable}
         onCancelChangeable={handleCancelChangeableWorkRequest}
+        onReduceChangeable={handleReduceChangeableWorkRequest}
         onResetChangeableDecision={handleResetChangeableDecision}
         savingId={savingId}
         savingChangeableId={savingChangeableId}

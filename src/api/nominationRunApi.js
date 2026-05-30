@@ -66,3 +66,18 @@ export async function cancelChangeableWorkRequest({
 
   return response.data;
 }
+
+export async function reduceChangeableWorkRequest({
+  nominationRunId,
+  workRequestId,
+  reduction = {},
+}) {
+  const response = await apiClient.patch(
+    `/nomination-runs/${nominationRunId}/changeables/${workRequestId}/reduce`,
+    {
+      reduction,
+    }
+  );
+
+  return response.data;
+}
