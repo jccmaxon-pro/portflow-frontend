@@ -81,3 +81,20 @@ export async function reduceChangeableWorkRequest({
 
   return response.data;
 }
+
+export async function changeShiftChangeableWorkRequest({
+  nominationRunId,
+  workRequestId,
+  newShiftCode,
+  notes = "",
+}) {
+  const response = await apiClient.patch(
+    `/nomination-runs/${nominationRunId}/changeables/${workRequestId}/change-shift`,
+    {
+      newShiftCode,
+      notes,
+    }
+  );
+
+  return response.data;
+}

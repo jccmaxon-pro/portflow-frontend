@@ -8,6 +8,7 @@ import {
   cancelChangeableWorkRequest,
   resetChangeableWorkRequestDecision,
   reduceChangeableWorkRequest,
+  changeShiftChangeableWorkRequest,
 } from "../../api/nominationRunApi";
 import NominationVisualResult from "./NominationVisualResult";
 
@@ -25,6 +26,20 @@ const OPERATIONAL_STATUS_LABELS = {
   CURRENT: "Estado correcto",
   NEEDS_REVIEW: "Revisar",
   INVALIDATED: "Invalidado",
+};
+
+const getAlternativeChangeableShiftCode = (shiftCode) => {
+  const safeShiftCode = String(shiftCode || "").trim().toUpperCase();
+
+  if (safeShiftCode === "08_14") {
+    return "08_18";
+  }
+
+  if (safeShiftCode === "08_18") {
+    return "08_14";
+  }
+
+  return "";
 };
 
 function getOperationalStatusLabel(operationalStatus) {
@@ -129,6 +144,7 @@ const CHANGEABLE_STATUS_LABELS = {
   CANCELLED: "Trabajo cancelado",
   REDUCED: "Trabajo reducido",
   MODIFIED: "Horario modificado",
+  SHIFT_CHANGED: "Horario Cambiado",
 };
 
 function getChangeableStatusLabel(status) {
@@ -149,7 +165,7 @@ function ChangeableStatusBadge({ status }) {
       ? "bg-red-100 text-red-800 ring-red-200"
       : normalizedStatus === "REDUCED"
       ? "bg-orange-100 text-orange-900 ring-orange-200"
-      : normalizedStatus === "MODIFIED"
+      : normalizedStatus === "MODIFIED" || normalizedStatus === "SHIFT_CHANGED"
       ? "bg-indigo-100 text-indigo-800 ring-indigo-200"
       : "bg-amber-100 text-amber-900 ring-amber-200";
 
@@ -217,6 +233,10 @@ function getEffectiveChangeableStatus({ nominationRun, workRequest }) {
 
   if (decision?.status === "MODIFIED") {
     return "MODIFIED";
+  }
+
+  if (decision?.status === "SHIFT_CHANGED") {
+    return "SHIFT_CHANGED";
   }
 
   if (decision?.status === "PENDING") {
@@ -313,6 +333,7 @@ function ChangeableWorkRequestsPanel({
   onCancelChangeable,
   onReduceChangeable,
   onResetChangeableDecision,
+  onChangeShiftChangeable,
   savingChangeableId,
 }) {
   const changeableWorkRequests = getChangeableWorkRequestsFromRun(selectedRun);
@@ -362,6 +383,15 @@ function ChangeableWorkRequestsPanel({
             workRequest,
           });
 
+          const changeableDecision = getChangeableDecisionForWorkRequest(
+            selectedRun,
+            workRequest
+          );
+
+          const alternativeShiftCode = getAlternativeChangeableShiftCode(
+            workRequest.shiftCode
+          );
+
           const hasFinalDecision = changeableStatus !== "PENDING_CONFIRMATION";
           const canUseMainActions = canManageChangeables && !hasFinalDecision;
 
@@ -383,6 +413,12 @@ function ChangeableWorkRequestsPanel({
                   <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm font-bold text-slate-600">
                     <span>Turno: {workRequest.shiftCode || "-"}</span>
                     <span>Muelle: {getBerthName(workRequest)}</span>
+                    {changeableStatus === "SHIFT_CHANGED" && (
+                      <span className="text-indigo-700">
+                        Cambio: {changeableDecision?.originalShiftCode || workRequest.shiftCode} →{" "}
+                        {changeableDecision?.newShiftCode || "-"}
+                      </span>
+                    )}
                     <span>
                       Tarea:{" "}
                       {workRequest.taskName ||
@@ -449,10 +485,24 @@ function ChangeableWorkRequestsPanel({
 
                   <button
                     type="button"
-                    disabled={!canUseMainActions || isSavingThisChangeable}
+                    disabled={
+                      !canUseMainActions ||
+                      !workRequestId ||
+                      !alternativeShiftCode ||
+                      isSavingThisChangeable
+                    }
+                    onClick={() =>
+                      onChangeShiftChangeable({
+                        nominationRunId: selectedRun._id,
+                        workRequest,
+                        shipName: workRequest.shipName,
+                      })
+                    }
                     className="rounded-xl bg-indigo-50 px-3 py-2 text-xs font-black text-indigo-700 ring-1 ring-indigo-100 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    Cambiar horario
+                    {alternativeShiftCode
+                      ? `Cambiar a ${alternativeShiftCode}`
+                      : "Cambiar horario"}
                   </button>
 
                   <button
@@ -520,6 +570,7 @@ function SelectedNominationRunDetail({
   onCancelChangeable,
   onReduceChangeable,
   onResetChangeableDecision,
+  onChangeShiftChangeable,
   savingId,
   savingChangeableId,
 }) {
@@ -629,6 +680,7 @@ function SelectedNominationRunDetail({
         onCancelChangeable={onCancelChangeable}
         onReduceChangeable={onReduceChangeable}
         onResetChangeableDecision={onResetChangeableDecision}
+        onChangeShiftChangeable={onChangeShiftChangeable}
         savingChangeableId={savingChangeableId}
       />
 
@@ -791,6 +843,7 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
       setSavingId(null);
     }
   }
+
 
   async function handleConfirmFullChangeable({
     nominationRunId,
@@ -1015,6 +1068,73 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
     }
   }
 
+  async function handleChangeShiftChangeableWorkRequest({
+    nominationRunId,
+    workRequest,
+    shipName,
+  }) {
+    const workRequestId = getWorkRequestId(workRequest);
+    const originalShiftCode = String(workRequest?.shiftCode || "")
+      .trim()
+      .toUpperCase();
+
+    const newShiftCode = getAlternativeChangeableShiftCode(originalShiftCode);
+
+    if (!workRequestId || !newShiftCode) {
+      setErrorMessage(
+        "No se puede cambiar el horario de este susceptible. Solo se permite 08_14 ↔ 08_18."
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `¿Cambiar el trabajo susceptible${
+        shipName ? ` del barco ${shipName}` : ""
+      } de ${originalShiftCode} a ${newShiftCode}? De momento solo se guardará la decisión. No se renombra todavía el nombramiento.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setSavingChangeableId(workRequestId);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      const result = await changeShiftChangeableWorkRequest({
+        nominationRunId,
+        workRequestId,
+        newShiftCode,
+        notes: `Cambio de horario de ${originalShiftCode} a ${newShiftCode}`,
+      });
+
+      if (!result.success) {
+        throw new Error(
+          result.message || "No se pudo cambiar el horario del trabajo susceptible"
+        );
+      }
+
+      setSuccessMessage("Horario del trabajo susceptible cambiado correctamente");
+
+      const detailResult = await getNominationRunById(nominationRunId);
+
+      if (detailResult.success) {
+        setSelectedRun(detailResult.data);
+      }
+
+      await loadNominationRuns();
+    } catch (error) {
+      setErrorMessage(
+        error.response?.data?.message ||
+          error.message ||
+          "Error cambiando horario del trabajo susceptible"
+      );
+    } finally {
+      setSavingChangeableId(null);
+    }
+  }
+
   return (
     <section className="mb-6 rounded-3xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 p-5">
@@ -1205,6 +1325,7 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
         onCancelChangeable={handleCancelChangeableWorkRequest}
         onReduceChangeable={handleReduceChangeableWorkRequest}
         onResetChangeableDecision={handleResetChangeableDecision}
+        onChangeShiftChangeable={handleChangeShiftChangeableWorkRequest}
         savingId={savingId}
         savingChangeableId={savingChangeableId}
       />
