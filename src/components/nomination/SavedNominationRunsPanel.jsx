@@ -5,6 +5,7 @@ import {
   getNominationRunById,
   getNominationRuns,
   publishNominationRun,
+  resetChangeableWorkRequestDecision,
 } from "../../api/nominationRunApi";
 import NominationVisualResult from "./NominationVisualResult";
 
@@ -216,6 +217,10 @@ function getEffectiveChangeableStatus({ nominationRun, workRequest }) {
     return "MODIFIED";
   }
 
+  if (decision?.status === "PENDING") {
+    return "PENDING_CONFIRMATION";
+  }
+
   return (
     workRequest.changeableStatus ||
     workRequest.confirmationStatus ||
@@ -303,6 +308,7 @@ function buildPositionSummary(assignments) {
 function ChangeableWorkRequestsPanel({
   selectedRun,
   onConfirmFullChangeable,
+  onResetChangeableDecision,
   savingChangeableId,
 }) {
   const changeableWorkRequests = getChangeableWorkRequestsFromRun(selectedRun);
@@ -352,6 +358,9 @@ function ChangeableWorkRequestsPanel({
             workRequest,
           });
 
+          const hasFinalDecision = changeableStatus !== "PENDING_CONFIRMATION";
+          const canUseMainActions = canManageChangeables && !hasFinalDecision;
+
           return (
             <div
               key={workRequestId || index}
@@ -399,10 +408,9 @@ function ChangeableWorkRequestsPanel({
                   <button
                     type="button"
                     disabled={
-                      !canManageChangeables ||
+                      !canUseMainActions ||
                       !workRequestId ||
-                      isSavingThisChangeable ||
-                      changeableStatus === "CONFIRMED"
+                      isSavingThisChangeable
                     }
                     onClick={() =>
                       onConfirmFullChangeable({
@@ -413,12 +421,12 @@ function ChangeableWorkRequestsPanel({
                     }
                     className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    {isSavingThisChangeable ? "Confirmando..." : "Confirmar completo"}
+                    {isSavingThisChangeable ? "Guardando..." : "Confirmar completo"}
                   </button>
 
                   <button
                     type="button"
-                    disabled={!canManageChangeables}
+                    disabled={!canUseMainActions || isSavingThisChangeable}
                     className="rounded-xl bg-orange-50 px-3 py-2 text-xs font-black text-orange-800 ring-1 ring-orange-100 hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Reducir
@@ -426,7 +434,7 @@ function ChangeableWorkRequestsPanel({
 
                   <button
                     type="button"
-                    disabled={!canManageChangeables}
+                    disabled={!canUseMainActions || isSavingThisChangeable}
                     className="rounded-xl bg-indigo-50 px-3 py-2 text-xs font-black text-indigo-700 ring-1 ring-indigo-100 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Cambiar horario
@@ -434,11 +442,32 @@ function ChangeableWorkRequestsPanel({
 
                   <button
                     type="button"
-                    disabled={!canManageChangeables}
+                    disabled={!canUseMainActions || isSavingThisChangeable}
                     className="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-700 ring-1 ring-red-100 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Cancelar
                   </button>
+
+                  {hasFinalDecision && (
+                    <button
+                      type="button"
+                      disabled={
+                        !canManageChangeables ||
+                        !workRequestId ||
+                        isSavingThisChangeable
+                      }
+                      onClick={() =>
+                        onResetChangeableDecision({
+                          nominationRunId: selectedRun._id,
+                          workRequestId,
+                          shipName: workRequest.shipName,
+                        })
+                      }
+                      className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 ring-1 ring-slate-200 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {isSavingThisChangeable ? "Volviendo..." : "Volver a pendiente"}
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -462,6 +491,7 @@ function SelectedNominationRunDetail({
   onPublish,
   onCancel,
   onConfirmFullChangeable,
+  onResetChangeableDecision,
   savingId,
   savingChangeableId,
 }) {
@@ -568,6 +598,7 @@ function SelectedNominationRunDetail({
       <ChangeableWorkRequestsPanel
         selectedRun={selectedRun}
         onConfirmFullChangeable={onConfirmFullChangeable}
+        onResetChangeableDecision={onResetChangeableDecision}
         savingChangeableId={savingChangeableId}
       />
 
@@ -782,6 +813,57 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
     }
   }
 
+  async function handleResetChangeableDecision({
+    nominationRunId,
+    workRequestId,
+    shipName,
+  }) {
+    const confirmed = window.confirm(
+      `¿Volver a pendiente el trabajo susceptible${
+        shipName ? ` del barco ${shipName}` : ""
+      }?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setSavingChangeableId(workRequestId);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      const result = await resetChangeableWorkRequestDecision({
+        nominationRunId,
+        workRequestId,
+      });
+
+      if (!result.success) {
+        throw new Error(
+          result.message || "No se pudo volver a pendiente el trabajo susceptible"
+        );
+      }
+
+      setSuccessMessage("Trabajo susceptible vuelto a pendiente correctamente");
+
+      const detailResult = await getNominationRunById(nominationRunId);
+
+      if (detailResult.success) {
+        setSelectedRun(detailResult.data);
+      }
+
+      await loadNominationRuns();
+    } catch (error) {
+      setErrorMessage(
+        error.response?.data?.message ||
+          error.message ||
+          "Error volviendo a pendiente el trabajo susceptible"
+      );
+    } finally {
+      setSavingChangeableId(null);
+    }
+  }
+
   return (
     <section className="mb-6 rounded-3xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 p-5">
@@ -969,6 +1051,7 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
         onPublish={handlePublish}
         onCancel={handleCancel}
         onConfirmFullChangeable={handleConfirmFullChangeable}
+        onResetChangeableDecision={handleResetChangeableDecision}
         savingId={savingId}
         savingChangeableId={savingChangeableId}
       />

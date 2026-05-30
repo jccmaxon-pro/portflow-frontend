@@ -44,3 +44,14 @@ export async function confirmFullChangeableWorkRequest({
 
   return response.data;
 }
+
+export async function resetChangeableWorkRequestDecision({
+  nominationRunId,
+  workRequestId,
+}) {
+  const response = await apiClient.patch(
+    `/nomination-runs/${nominationRunId}/changeables/${workRequestId}/reset`
+  );
+
+  return response.data;
+}
