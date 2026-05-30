@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   cancelNominationRun,
   confirmFullChangeableWorkRequest,
@@ -277,6 +277,50 @@ function getChangeableWorkRequestsFromRun(nominationRun) {
   });
 }
 
+function buildChangeableDecisionSummary(nominationRun) {
+  const changeableWorkRequests = getChangeableWorkRequestsFromRun(nominationRun);
+
+  const summary = {
+    total: changeableWorkRequests.length,
+    pending: 0,
+    confirmed: 0,
+    cancelled: 0,
+    reduced: 0,
+    shifted: 0,
+  };
+
+  for (const workRequest of changeableWorkRequests) {
+    const status = getEffectiveChangeableStatus({
+      nominationRun,
+      workRequest,
+    });
+
+    if (status === "CONFIRMED" || status === "CONFIRMED_FULL") {
+      summary.confirmed += 1;
+      continue;
+    }
+
+    if (status === "CANCELLED") {
+      summary.cancelled += 1;
+      continue;
+    }
+
+    if (status === "REDUCED") {
+      summary.reduced += 1;
+      continue;
+    }
+
+    if (status === "SHIFT_CHANGED" || status === "MODIFIED") {
+      summary.shifted += 1;
+      continue;
+    }
+
+    summary.pending += 1;
+  }
+
+  return summary;
+}
+
 function getAssignmentsForWorkRequest(nominationRun, workRequest) {
   const assignments = nominationRun?.result?.assignments || [];
   const workRequestId = getWorkRequestId(workRequest);
@@ -343,6 +387,7 @@ function ChangeableWorkRequestsPanel({
   }
 
   const canManageChangeables = selectedRun.status === "PUBLISHED";
+  const decisionSummary = buildChangeableDecisionSummary(selectedRun);
 
   return (
     <div className="mb-5 rounded-3xl border border-amber-300 bg-amber-50 p-5 shadow-sm">
@@ -359,9 +404,36 @@ function ChangeableWorkRequestsPanel({
           </p>
         </div>
 
-        <div className="rounded-2xl bg-white px-4 py-3 text-sm font-black text-amber-900 shadow-sm ring-1 ring-amber-200">
-          {changeableWorkRequests.length} susceptible
-          {changeableWorkRequests.length === 1 ? "" : "s"}
+        <div className="grid grid-cols-2 gap-2 rounded-2xl bg-white p-3 text-xs font-black shadow-sm ring-1 ring-amber-200 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="rounded-xl bg-slate-50 px-3 py-2 text-center text-slate-700">
+            <div className="text-lg">{decisionSummary.total}</div>
+            <div>Total</div>
+          </div>
+
+          <div className="rounded-xl bg-amber-50 px-3 py-2 text-center text-amber-800">
+            <div className="text-lg">{decisionSummary.pending}</div>
+            <div>Pendientes</div>
+          </div>
+
+          <div className="rounded-xl bg-emerald-50 px-3 py-2 text-center text-emerald-700">
+            <div className="text-lg">{decisionSummary.confirmed}</div>
+            <div>Confirmados</div>
+          </div>
+
+          <div className="rounded-xl bg-red-50 px-3 py-2 text-center text-red-700">
+            <div className="text-lg">{decisionSummary.cancelled}</div>
+            <div>Cancelados</div>
+          </div>
+
+          <div className="rounded-xl bg-orange-50 px-3 py-2 text-center text-orange-800">
+            <div className="text-lg">{decisionSummary.reduced}</div>
+            <div>Reducidos</div>
+          </div>
+
+          <div className="rounded-xl bg-indigo-50 px-3 py-2 text-center text-indigo-700">
+            <div className="text-lg">{decisionSummary.shifted}</div>
+            <div>Cambio horario</div>
+          </div>
         </div>
       </div>
 
@@ -573,6 +645,7 @@ function SelectedNominationRunDetail({
   onChangeShiftChangeable,
   savingId,
   savingChangeableId,
+  changeablePanelRef,
 }) {
   if (!selectedRun) {
     return null;
@@ -674,6 +747,9 @@ function SelectedNominationRunDetail({
           </p>
         </div>
       )}        
+
+      <div ref={changeablePanelRef} />
+
       <ChangeableWorkRequestsPanel
         selectedRun={selectedRun}
         onConfirmFullChangeable={onConfirmFullChangeable}
@@ -698,6 +774,8 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
 
   const [selectedRun, setSelectedRun] = useState(null);
   const [loadingDetailId, setLoadingDetailId] = useState(null);
+
+  const changeablePanelRef = useRef(null);
 
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -738,6 +816,15 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
   useEffect(() => {
     loadNominationRuns();
   }, [refreshKey, statusFilter]);
+
+  function scrollToChangeablePanel() {
+    setTimeout(() => {
+      changeablePanelRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 100);
+  }
 
   async function handleView(nominationRun) {
     try {
@@ -882,6 +969,7 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
 
       if (detailResult.success) {
         setSelectedRun(detailResult.data);
+        scrollToChangeablePanel();
       }
 
       await loadNominationRuns();
@@ -933,6 +1021,7 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
 
       if (detailResult.success) {
         setSelectedRun(detailResult.data);
+        scrollToChangeablePanel();
       }
 
       await loadNominationRuns();
@@ -1003,6 +1092,7 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
 
       if (detailResult.success) {
         setSelectedRun(detailResult.data);
+        scrollToChangeablePanel();
       }
 
       await loadNominationRuns();
@@ -1054,6 +1144,7 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
 
       if (detailResult.success) {
         setSelectedRun(detailResult.data);
+        scrollToChangeablePanel();
       }
 
       await loadNominationRuns();
@@ -1121,6 +1212,7 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
 
       if (detailResult.success) {
         setSelectedRun(detailResult.data);
+        scrollToChangeablePanel();
       }
 
       await loadNominationRuns();
@@ -1328,6 +1420,7 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
         onChangeShiftChangeable={handleChangeShiftChangeableWorkRequest}
         savingId={savingId}
         savingChangeableId={savingChangeableId}
+        changeablePanelRef={changeablePanelRef}
       />
     </section>
   );
