@@ -33,3 +33,14 @@ export async function cancelNominationRun(nominationRunId) {
 
   return response.data;
 }
+
+export async function confirmFullChangeableWorkRequest({
+  nominationRunId,
+  workRequestId,
+}) {
+  const response = await apiClient.patch(
+    `/nomination-runs/${nominationRunId}/changeables/${workRequestId}/confirm-full`
+  );
+
+  return response.data;
+}

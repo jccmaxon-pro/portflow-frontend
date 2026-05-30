@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   cancelNominationRun,
+  confirmFullChangeableWorkRequest,
   getNominationRunById,
   getNominationRuns,
   publishNominationRun,
@@ -120,7 +121,8 @@ function StatusBadge({ status }) {
 
 const CHANGEABLE_STATUS_LABELS = {
   PENDING_CONFIRMATION: "Pendiente de confirmación",
-  CONFIRMED: "Confirmado",
+  CONFIRMED: "Confirmado completo",
+  CONFIRMED_FULL: "Confirmado completo",
   CANCELLED: "Cancelado",
   REDUCED: "Reducido",
   MODIFIED: "Modificado",
@@ -159,6 +161,66 @@ function ChangeableStatusBadge({ status }) {
 
 function getWorkRequestId(workRequest) {
   return String(workRequest?._id || workRequest?.id || "");
+}
+
+function normalizeId(value) {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (value._id) {
+    return String(value._id);
+  }
+
+  return String(value);
+}
+
+function getChangeableDecisionForWorkRequest(nominationRun, workRequest) {
+  const decisions = nominationRun?.changeableDecisions || [];
+  const workRequestId = getWorkRequestId(workRequest);
+
+  if (!Array.isArray(decisions) || !workRequestId) {
+    return null;
+  }
+
+  return (
+    decisions.find((decision) => {
+      return normalizeId(decision.workRequestId) === normalizeId(workRequestId);
+    }) || null
+  );
+}
+
+function getEffectiveChangeableStatus({ nominationRun, workRequest }) {
+  const decision = getChangeableDecisionForWorkRequest(
+    nominationRun,
+    workRequest
+  );
+
+  if (decision?.status === "CONFIRMED_FULL") {
+    return "CONFIRMED";
+  }
+
+  if (decision?.status === "CANCELLED") {
+    return "CANCELLED";
+  }
+
+  if (decision?.status === "REDUCED") {
+    return "REDUCED";
+  }
+
+  if (decision?.status === "MODIFIED") {
+    return "MODIFIED";
+  }
+
+  return (
+    workRequest.changeableStatus ||
+    workRequest.confirmationStatus ||
+    "PENDING_CONFIRMATION"
+  );
 }
 
 function getBerthName(workRequest) {
@@ -238,7 +300,11 @@ function buildPositionSummary(assignments) {
     .join(" · ");
 }
 
-function ChangeableWorkRequestsPanel({ selectedRun }) {
+function ChangeableWorkRequestsPanel({
+  selectedRun,
+  onConfirmFullChangeable,
+  savingChangeableId,
+}) {
   const changeableWorkRequests = getChangeableWorkRequestsFromRun(selectedRun);
 
   if (changeableWorkRequests.length === 0) {
@@ -270,6 +336,10 @@ function ChangeableWorkRequestsPanel({ selectedRun }) {
 
       <div className="mt-5 space-y-3">
         {changeableWorkRequests.map((workRequest, index) => {
+
+          const workRequestId = getWorkRequestId(workRequest);
+          const isSavingThisChangeable = savingChangeableId === workRequestId;
+
           const assignments = getAssignmentsForWorkRequest(
             selectedRun,
             workRequest
@@ -277,14 +347,14 @@ function ChangeableWorkRequestsPanel({ selectedRun }) {
 
           const positionSummary = buildPositionSummary(assignments);
 
-          const changeableStatus =
-            workRequest.changeableStatus ||
-            workRequest.confirmationStatus ||
-            "PENDING_CONFIRMATION";
+          const changeableStatus = getEffectiveChangeableStatus({
+            nominationRun: selectedRun,
+            workRequest,
+          });
 
           return (
             <div
-              key={getWorkRequestId(workRequest) || index}
+              key={workRequestId || index}
               className="rounded-3xl border border-amber-200 bg-white p-4 shadow-sm"
             >
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
@@ -328,10 +398,22 @@ function ChangeableWorkRequestsPanel({ selectedRun }) {
                 <div className="flex flex-wrap justify-start gap-2 lg:justify-end lg:whitespace-nowrap">
                   <button
                     type="button"
-                    disabled={!canManageChangeables}
+                    disabled={
+                      !canManageChangeables ||
+                      !workRequestId ||
+                      isSavingThisChangeable ||
+                      changeableStatus === "CONFIRMED"
+                    }
+                    onClick={() =>
+                      onConfirmFullChangeable({
+                        nominationRunId: selectedRun._id,
+                        workRequestId,
+                        shipName: workRequest.shipName,
+                      })
+                    }
                     className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    Confirmar completo
+                    {isSavingThisChangeable ? "Confirmando..." : "Confirmar completo"}
                   </button>
 
                   <button
@@ -379,7 +461,9 @@ function SelectedNominationRunDetail({
   onClose,
   onPublish,
   onCancel,
+  onConfirmFullChangeable,
   savingId,
+  savingChangeableId,
 }) {
   if (!selectedRun) {
     return null;
@@ -481,7 +565,11 @@ function SelectedNominationRunDetail({
           </p>
         </div>
       )}        
-      <ChangeableWorkRequestsPanel selectedRun={selectedRun} />
+      <ChangeableWorkRequestsPanel
+        selectedRun={selectedRun}
+        onConfirmFullChangeable={onConfirmFullChangeable}
+        savingChangeableId={savingChangeableId}
+      />
 
       <NominationVisualResult simulationResult={selectedRun.result} />
     </section>
@@ -492,6 +580,7 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
   const [nominationRuns, setNominationRuns] = useState([]);
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState(null);
+  const [savingChangeableId, setSavingChangeableId] = useState(null);
   const [statusFilter, setStatusFilter] = useState("");
 
   const [selectedRun, setSelectedRun] = useState(null);
@@ -639,6 +728,57 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
       );
     } finally {
       setSavingId(null);
+    }
+  }
+
+  async function handleConfirmFullChangeable({
+    nominationRunId,
+    workRequestId,
+    shipName,
+  }) {
+    const confirmed = window.confirm(
+      `¿Confirmar completo el trabajo susceptible${
+        shipName ? ` del barco ${shipName}` : ""
+      }?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setSavingChangeableId(workRequestId);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      const result = await confirmFullChangeableWorkRequest({
+        nominationRunId,
+        workRequestId,
+      });
+
+      if (!result.success) {
+        throw new Error(
+          result.message || "No se pudo confirmar el trabajo susceptible"
+        );
+      }
+
+      setSuccessMessage("Trabajo susceptible confirmado completo correctamente");
+
+      const detailResult = await getNominationRunById(nominationRunId);
+
+      if (detailResult.success) {
+        setSelectedRun(detailResult.data);
+      }
+
+      await loadNominationRuns();
+    } catch (error) {
+      setErrorMessage(
+        error.response?.data?.message ||
+          error.message ||
+          "Error confirmando trabajo susceptible"
+      );
+    } finally {
+      setSavingChangeableId(null);
     }
   }
 
@@ -828,7 +968,9 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
         onClose={() => setSelectedRun(null)}
         onPublish={handlePublish}
         onCancel={handleCancel}
+        onConfirmFullChangeable={handleConfirmFullChangeable}
         savingId={savingId}
+        savingChangeableId={savingChangeableId}
       />
     </section>
   );
