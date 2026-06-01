@@ -98,3 +98,11 @@ export async function changeShiftChangeableWorkRequest({
 
   return response.data;
 }
+
+export async function prepareChangeableDefinitivePlan(nominationRunId) {
+  const response = await apiClient.post(
+    `/nomination-runs/${nominationRunId}/changeables/prepare-definitive`
+  );
+
+  return response.data;
+}
