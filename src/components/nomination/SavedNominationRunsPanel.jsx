@@ -371,6 +371,244 @@ function buildPositionSummary(assignments) {
     .join(" · ");
 }
 
+function buildPositionCounts(assignments) {
+  const counts = {};
+
+  for (const assignment of assignments || []) {
+    const positionCode = assignment?.positionCode || "SIN_PUESTO";
+
+    counts[positionCode] = (counts[positionCode] || 0) + 1;
+  }
+
+  return Object.fromEntries(
+    Object.entries(counts).sort(([positionA], [positionB]) =>
+      positionA.localeCompare(positionB)
+    )
+  );
+}
+
+function estimateHandsFromPositions(positionCounts) {
+  const values = Object.values(positionCounts || {}).filter((value) => {
+    return Number(value) > 0;
+  });
+  if (values.length === 0) {
+    return 1;
+  }
+  const maxValue = Math.max(...values);
+  if (maxValue >= 10) {
+    return 3;
+  }
+  if (maxValue >= 6) {
+    return 2;
+  }
+  return 1;
+}
+
+function buildReducedPositionsByHands({ originalPositions, targetHands }) {
+  const safeTargetHands = Number(targetHands);
+
+  if (![1, 2, 3].includes(safeTargetHands)) {
+    return originalPositions || {};
+  }
+
+  const estimatedOriginalHands = estimateHandsFromPositions(originalPositions);
+  const reducedPositions = {};
+
+  for (const [positionCode, originalAmount] of Object.entries(
+    originalPositions || {}
+  )) {
+    const safeOriginalAmount = Number(originalAmount) || 0;
+    const newAmount = Math.ceil(
+      (safeOriginalAmount * safeTargetHands) / estimatedOriginalHands
+    );
+    reducedPositions[positionCode] = Math.max(0, newAmount);
+  }
+  return reducedPositions;
+}
+
+function ReduceChangeableForm({
+  selectedRun,
+  workRequest,
+  assignments,
+  onSaveReduction,
+  onCancelReduction,
+  savingChangeableId,
+}) {
+  const workRequestId = getWorkRequestId(workRequest);
+
+  const originalPositions = buildPositionCounts(assignments);
+  const [presetHands, setPresetHands] = useState(() =>
+    estimateHandsFromPositions(originalPositions)
+  );
+  const [newPositions, setNewPositions] = useState(originalPositions);
+  const [notes, setNotes] = useState("");
+
+  const isSavingThisChangeable = savingChangeableId === workRequestId;
+
+  function applyHands(nextHands) {
+    setPresetHands(nextHands);
+    setNewPositions(
+      buildReducedPositionsByHands({
+        originalPositions,
+        targetHands: nextHands,
+      })
+    );
+  }
+
+  function updatePositionAmount(positionCode, value) {
+    const numericValue = Math.max(0, Number(value) || 0);
+
+    setNewPositions((current) => ({
+      ...current,
+      [positionCode]: numericValue,
+    }));
+  }
+
+  function handleSubmit(event) {
+    event.preventDefault();
+
+    onSaveReduction({
+      nominationRunId: selectedRun._id,
+      workRequestId,
+      shipName: workRequest.shipName,
+      reduction: {
+        mode: "EDITED_POSITIONS",
+        presetHands,
+        originalShiftCode: workRequest.shiftCode || "",
+        newShiftCode: workRequest.shiftCode || "",
+        originalPositions,
+        newPositions,
+        notes:
+          notes.trim() ||
+          `Reducción estructurada a ${presetHands} mano${
+            presetHands === 1 ? "" : "s"
+          }`,
+      },
+    });
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="mt-4 rounded-3xl border border-orange-200 bg-orange-50 p-4"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-black uppercase tracking-wide text-orange-900">
+            Reducir trabajo susceptible
+          </div>
+
+          <p className="mt-1 text-sm font-bold text-orange-900">
+            Elige una reducción rápida por manos o ajusta manualmente cada
+            puesto.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onCancelReduction}
+          className="rounded-xl bg-white px-3 py-2 text-xs font-black text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+        >
+          Cerrar reducción
+        </button>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {[1, 2, 3].map((hands) => {
+          const isActive = presetHands === hands;
+
+          return (
+            <button
+              key={hands}
+              type="button"
+              onClick={() => applyHands(hands)}
+              className={`rounded-xl px-4 py-2 text-sm font-black ring-1 ${
+                isActive
+                  ? "bg-orange-600 text-white ring-orange-600"
+                  : "bg-white text-orange-800 ring-orange-200 hover:bg-orange-100"
+              }`}
+            >
+              {hands} mano{hands === 1 ? "" : "s"}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 overflow-x-auto rounded-2xl border border-orange-200 bg-white">
+        <table className="w-full min-w-[520px] border-collapse text-sm">
+          <thead>
+            <tr className="bg-orange-50 text-left text-xs font-black uppercase tracking-wide text-orange-900">
+              <th className="px-4 py-3">Puesto</th>
+              <th className="px-4 py-3">Original</th>
+              <th className="px-4 py-3">Nueva cantidad</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {Object.entries(originalPositions).map(
+              ([positionCode, originalAmount]) => (
+                <tr key={positionCode} className="border-t border-orange-100">
+                  <td className="px-4 py-3 font-black text-slate-800">
+                    {positionCode}
+                  </td>
+
+                  <td className="px-4 py-3 font-bold text-slate-600">
+                    {originalAmount}
+                  </td>
+
+                  <td className="px-4 py-3">
+                    <input
+                      type="number"
+                      min="0"
+                      value={newPositions[positionCode] ?? 0}
+                      onChange={(event) =>
+                        updatePositionAmount(positionCode, event.target.value)
+                      }
+                      className="w-24 rounded-xl border border-slate-200 px-3 py-2 font-bold text-slate-900 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                    />
+                  </td>
+                </tr>
+              )
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <label className="mt-4 block">
+        <span className="text-xs font-black uppercase tracking-wide text-orange-900">
+          Nota opcional
+        </span>
+
+        <textarea
+          value={notes}
+          onChange={(event) => setNotes(event.target.value)}
+          rows={2}
+          placeholder="Ejemplo: De 3 manos pasa a 1 mano"
+          className="mt-2 w-full rounded-2xl border border-orange-200 px-4 py-3 text-sm font-bold text-slate-800 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+        />
+      </label>
+
+      <div className="mt-4 flex flex-wrap justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCancelReduction}
+          className="rounded-xl bg-white px-4 py-3 text-sm font-black text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+        >
+          Cancelar
+        </button>
+
+        <button
+          type="submit"
+          disabled={isSavingThisChangeable}
+          className="rounded-xl bg-orange-600 px-4 py-3 text-sm font-black text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {isSavingThisChangeable ? "Guardando..." : "Guardar reducción"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function ChangeableWorkRequestsPanel({
   selectedRun,
   onConfirmFullChangeable,
@@ -378,6 +616,9 @@ function ChangeableWorkRequestsPanel({
   onReduceChangeable,
   onResetChangeableDecision,
   onChangeShiftChangeable,
+  reducingWorkRequestId,
+  onStartReduceChangeable,
+  onCancelReduceChangeable,
   savingChangeableId,
 }) {
   const changeableWorkRequests = getChangeableWorkRequestsFromRun(selectedRun);
@@ -543,16 +784,10 @@ function ChangeableWorkRequestsPanel({
                       !workRequestId ||
                       isSavingThisChangeable
                     }
-                    onClick={() =>
-                      onReduceChangeable({
-                        nominationRunId: selectedRun._id,
-                        workRequestId,
-                        shipName: workRequest.shipName,
-                      })
-                    }
+                    onClick={() => onStartReduceChangeable(workRequestId)}
                     className="rounded-xl bg-orange-50 px-3 py-2 text-xs font-black text-orange-800 ring-1 ring-orange-100 hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    {isSavingThisChangeable ? "Reduciendo..." : "Reducir"}
+                    {reducingWorkRequestId === workRequestId ? "Editando reducción" : "Reducir"}
                   </button>
 
                   <button
@@ -619,6 +854,17 @@ function ChangeableWorkRequestsPanel({
                 </div>
               </div>
 
+              {reducingWorkRequestId === workRequestId && (
+                <ReduceChangeableForm
+                  selectedRun={selectedRun}
+                  workRequest={workRequest}
+                  assignments={assignments}
+                  onSaveReduction={onReduceChangeable}
+                  onCancelReduction={onCancelReduceChangeable}
+                  savingChangeableId={savingChangeableId}
+                />
+              )}
+
               {!canManageChangeables && (
                 <div className="mt-3 rounded-2xl bg-slate-50 p-3 text-xs font-bold text-slate-500">
                   Las acciones de susceptible solo estarán disponibles cuando el
@@ -643,6 +889,9 @@ function SelectedNominationRunDetail({
   onReduceChangeable,
   onResetChangeableDecision,
   onChangeShiftChangeable,
+  reducingWorkRequestId,
+  onStartReduceChangeable,
+  onCancelReduceChangeable,
   savingId,
   savingChangeableId,
   changeablePanelRef,
@@ -757,6 +1006,9 @@ function SelectedNominationRunDetail({
         onReduceChangeable={onReduceChangeable}
         onResetChangeableDecision={onResetChangeableDecision}
         onChangeShiftChangeable={onChangeShiftChangeable}
+        reducingWorkRequestId={reducingWorkRequestId}
+        onStartReduceChangeable={onStartReduceChangeable}
+        onCancelReduceChangeable={onCancelReduceChangeable}
         savingChangeableId={savingChangeableId}
       />
 
@@ -771,6 +1023,7 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
   const [savingId, setSavingId] = useState(null);
   const [savingChangeableId, setSavingChangeableId] = useState(null);
   const [statusFilter, setStatusFilter] = useState("");
+  const [reducingWorkRequestId, setReducingWorkRequestId] = useState(null);
 
   const [selectedRun, setSelectedRun] = useState(null);
   const [loadingDetailId, setLoadingDetailId] = useState(null);
@@ -1040,26 +1293,17 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
     nominationRunId,
     workRequestId,
     shipName,
+    reduction,
   }) {
-    const notes = window.prompt(
-      `Indica brevemente la reducción del trabajo susceptible${
-        shipName ? ` del barco ${shipName}` : ""
-      }.\n\nEjemplo: "De 3 manos pasa a 1 mano" o "Se reduce una mano".`
-    );
-
-    if (notes === null) {
-      return;
-    }
-
-    const cleanNotes = notes.trim();
-
-    if (!cleanNotes) {
-      setErrorMessage("Debes indicar una nota para la reducción");
+    if (!reduction?.newPositions || !reduction?.originalPositions) {
+      setErrorMessage("Faltan cantidades para guardar la reducción");
       return;
     }
 
     const confirmed = window.confirm(
-      `¿Seguro que quieres marcar este trabajo susceptible como reducido?\n\n${cleanNotes}\n\nDe momento solo se guardará la decisión. No se renombra todavía el nombramiento.`
+      `¿Guardar la reducción del trabajo susceptible${
+        shipName ? ` del barco ${shipName}` : ""
+      }?\n\nDe momento solo se guardará la decisión estructurada. No se renombra todavía el nombramiento.`
     );
 
     if (!confirmed) {
@@ -1074,10 +1318,7 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
       const result = await reduceChangeableWorkRequest({
         nominationRunId,
         workRequestId,
-        reduction: {
-          mode: "MANUAL_REDUCTION",
-          notes: cleanNotes,
-        },
+        reduction,
       });
 
       if (!result.success) {
@@ -1087,12 +1328,12 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
       }
 
       setSuccessMessage("Trabajo susceptible reducido correctamente");
+      setReducingWorkRequestId(null);
 
       const detailResult = await getNominationRunById(nominationRunId);
 
       if (detailResult.success) {
         setSelectedRun(detailResult.data);
-        scrollToChangeablePanel();
       }
 
       await loadNominationRuns();
@@ -1418,6 +1659,9 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
         onReduceChangeable={handleReduceChangeableWorkRequest}
         onResetChangeableDecision={handleResetChangeableDecision}
         onChangeShiftChangeable={handleChangeShiftChangeableWorkRequest}
+        reducingWorkRequestId={reducingWorkRequestId}
+        onStartReduceChangeable={setReducingWorkRequestId}
+        onCancelReduceChangeable={() => setReducingWorkRequestId(null)}
         savingId={savingId}
         savingChangeableId={savingChangeableId}
         changeablePanelRef={changeablePanelRef}
