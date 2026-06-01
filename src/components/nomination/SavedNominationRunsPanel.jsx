@@ -323,6 +323,236 @@ function buildChangeableDecisionSummary(nominationRun) {
   return summary;
 }
 
+function buildPreparedChangeablePlan(nominationRun) {
+  const changeableWorkRequests = getChangeableWorkRequestsFromRun(nominationRun);
+
+  return changeableWorkRequests.map((workRequest) => {
+    const workRequestId = getWorkRequestId(workRequest);
+
+    const decision = getChangeableDecisionForWorkRequest(
+      nominationRun,
+      workRequest
+    );
+
+    const effectiveStatus = getEffectiveChangeableStatus({
+      nominationRun,
+      workRequest,
+    });
+
+    const assignments = getAssignmentsForWorkRequest(nominationRun, workRequest);
+    const originalPositions = buildPositionCounts(assignments);
+
+    const baseItem = {
+      workRequestId,
+      shipName: workRequest.shipName || "Barco sin nombre",
+      berthName: getBerthName(workRequest),
+      taskName: workRequest.taskName || workRequest.taskCode || "Sin tarea",
+      companyName: workRequest.requestingCompanyName || "-",
+      originalShiftCode: workRequest.shiftCode || "",
+      finalShiftCode: workRequest.shiftCode || "",
+      decisionStatus: effectiveStatus,
+      actionLabel: "Pendiente",
+      originalPositions,
+      finalPositions: originalPositions,
+      isIncludedInFinalNomination: true,
+      notes: decision?.notes || "",
+    };
+
+    if (effectiveStatus === "CONFIRMED" || effectiveStatus === "CONFIRMED_FULL") {
+      return {
+        ...baseItem,
+        actionLabel: "Se mantiene completo",
+      };
+    }
+
+    if (effectiveStatus === "CANCELLED") {
+      return {
+        ...baseItem,
+        actionLabel: "Se elimina del definitivo",
+        isIncludedInFinalNomination: false,
+        finalPositions: {},
+      };
+    }
+
+    if (effectiveStatus === "REDUCED") {
+      return {
+        ...baseItem,
+        actionLabel: "Se mantiene reducido",
+        finalShiftCode:
+          decision?.reduction?.newShiftCode ||
+          decision?.newShiftCode ||
+          workRequest.shiftCode ||
+          "",
+        finalPositions:
+          decision?.reduction?.newPositions &&
+          typeof decision.reduction.newPositions === "object"
+            ? decision.reduction.newPositions
+            : originalPositions,
+        notes: decision?.reduction?.notes || decision?.notes || "",
+      };
+    }
+
+    if (effectiveStatus === "SHIFT_CHANGED" || effectiveStatus === "MODIFIED") {
+      return {
+        ...baseItem,
+        actionLabel: "Cambia de horario",
+        finalShiftCode:
+          decision?.newShiftCode ||
+          decision?.modifiedShiftCode ||
+          getAlternativeChangeableShiftCode(workRequest.shiftCode) ||
+          workRequest.shiftCode ||
+          "",
+      };
+    }
+
+    return baseItem;
+  });
+}
+
+function PreparedChangeablePlanPanel({ preparedPlan, onClose }) {
+  if (!Array.isArray(preparedPlan) || preparedPlan.length === 0) {
+    return null;
+  }
+
+  const includedCount = preparedPlan.filter(
+    (item) => item.isIncludedInFinalNomination
+  ).length;
+
+  const cancelledCount = preparedPlan.length - includedCount;
+
+  return (
+    <div className="mb-5 rounded-3xl border border-sky-300 bg-sky-50 p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="text-sm font-black uppercase tracking-wide text-sky-900">
+            Plan preparado para nombramiento definitivo
+          </div>
+
+          <p className="mt-2 max-w-4xl text-sm font-bold leading-6 text-sky-900">
+            Esto todavía no renombra ni guarda snapshots. Solo muestra cómo
+            quedaría la ventana aplicando las decisiones tomadas sobre los
+            trabajos susceptibles.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-2xl bg-white px-4 py-3 text-sm font-black text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+        >
+          Cerrar plan
+        </button>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-sky-100">
+          <div className="text-xs font-black uppercase text-slate-500">
+            Susceptibles revisados
+          </div>
+          <div className="mt-1 text-2xl font-black text-slate-950">
+            {preparedPlan.length}
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-emerald-100">
+          <div className="text-xs font-black uppercase text-emerald-700">
+            Entran en definitivo
+          </div>
+          <div className="mt-1 text-2xl font-black text-emerald-800">
+            {includedCount}
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-red-100">
+          <div className="text-xs font-black uppercase text-red-700">
+            Cancelados
+          </div>
+          <div className="mt-1 text-2xl font-black text-red-800">
+            {cancelledCount}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 space-y-3">
+        {preparedPlan.map((item) => (
+          <div
+            key={item.workRequestId}
+            className="rounded-3xl border border-sky-200 bg-white p-4 shadow-sm"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h4 className="text-lg font-black text-slate-950">
+                    {item.shipName}
+                  </h4>
+
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-wide ring-1 ${
+                      item.isIncludedInFinalNomination
+                        ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                        : "bg-red-50 text-red-700 ring-red-200"
+                    }`}
+                  >
+                    {item.actionLabel}
+                  </span>
+                </div>
+
+                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm font-bold text-slate-600">
+                  <span>Muelle: {item.berthName}</span>
+                  <span>Tarea: {item.taskName}</span>
+                  <span>Empresa: {item.companyName}</span>
+                  <span>
+                    Turno: {item.originalShiftCode}
+                    {item.finalShiftCode !== item.originalShiftCode
+                      ? ` → ${item.finalShiftCode}`
+                      : ""}
+                  </span>
+                </div>
+
+                {item.notes && (
+                  <div className="mt-2 rounded-2xl bg-slate-50 p-3 text-sm font-bold text-slate-600">
+                    {item.notes}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {item.isIncludedInFinalNomination ? (
+              <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <div className="text-xs font-black uppercase tracking-wide text-slate-500">
+                    Original
+                  </div>
+                  <div className="mt-1 text-sm font-bold text-slate-700">
+                    {Object.entries(item.originalPositions)
+                      .map(([positionCode, amount]) => `${positionCode}: ${amount}`)
+                      .join(" · ") || "-"}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl bg-emerald-50 p-3">
+                  <div className="text-xs font-black uppercase tracking-wide text-emerald-700">
+                    Definitivo previsto
+                  </div>
+                  <div className="mt-1 text-sm font-bold text-emerald-800">
+                    {Object.entries(item.finalPositions)
+                      .map(([positionCode, amount]) => `${positionCode}: ${amount}`)
+                      .join(" · ") || "-"}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 rounded-2xl bg-red-50 p-3 text-sm font-black text-red-700">
+                Este trabajo no entraría en el nombramiento definitivo.
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function getAssignmentsForWorkRequest(nominationRun, workRequest) {
   const assignments = nominationRun?.result?.assignments || [];
   const workRequestId = getWorkRequestId(workRequest);
@@ -621,6 +851,7 @@ function ChangeableWorkRequestsPanel({
   reducingWorkRequestId,
   onStartReduceChangeable,
   onCancelReduceChangeable,
+  onPrepareDefinitiveNomination,
   savingChangeableId,
 }) {
   const changeableWorkRequests = getChangeableWorkRequestsFromRun(selectedRun);
@@ -698,9 +929,8 @@ function ChangeableWorkRequestsPanel({
 
             <button
               type="button"
-              disabled
-              className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white opacity-60"
-              title="Todavía no renombra. Lo activaremos en la siguiente fase."
+              onClick={() => onPrepareDefinitiveNomination(selectedRun)}
+              className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white hover:bg-emerald-700"
             >
               Preparar nombramiento definitivo
             </button>
@@ -922,6 +1152,9 @@ function SelectedNominationRunDetail({
   reducingWorkRequestId,
   onStartReduceChangeable,
   onCancelReduceChangeable,
+  preparedChangeablePlan,
+  onClosePreparedChangeablePlan,
+  onPrepareDefinitiveNomination,
   savingId,
   savingChangeableId,
   changeablePanelRef,
@@ -1040,6 +1273,12 @@ function SelectedNominationRunDetail({
         onStartReduceChangeable={onStartReduceChangeable}
         onCancelReduceChangeable={onCancelReduceChangeable}
         savingChangeableId={savingChangeableId}
+        onPrepareDefinitiveNomination={onPrepareDefinitiveNomination}
+      />
+
+      <PreparedChangeablePlanPanel
+        preparedPlan={preparedChangeablePlan}
+        onClose={onClosePreparedChangeablePlan}
       />
 
       <NominationVisualResult simulationResult={selectedRun.result} />
@@ -1057,6 +1296,7 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
 
   const [selectedRun, setSelectedRun] = useState(null);
   const [loadingDetailId, setLoadingDetailId] = useState(null);
+  const [preparedChangeablePlan, setPreparedChangeablePlan] = useState(null);
 
   const changeablePanelRef = useRef(null);
 
@@ -1121,6 +1361,7 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
         throw new Error(result.message || "No se pudo cargar el detalle");
       }
 
+      setPreparedChangeablePlan(null);
       setSelectedRun(result.data);
     } catch (error) {
       setSelectedRun(null);
@@ -1132,6 +1373,27 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
     } finally {
       setLoadingDetailId(null);
     }
+  }
+
+  function handlePrepareDefinitiveNomination(nominationRun) {
+    const summary = buildChangeableDecisionSummary(nominationRun);
+
+    if (!summary.total) {
+      setErrorMessage("Este nombramiento no tiene trabajos susceptibles");
+      return;
+    }
+
+    if (!summary.allResolved) {
+      setErrorMessage(
+        "Todavía hay trabajos susceptibles pendientes. Resuélvelos antes de preparar el definitivo."
+      );
+      return;
+    }
+
+    const plan = buildPreparedChangeablePlan(nominationRun);
+
+    setPreparedChangeablePlan(plan);
+    setSuccessMessage("Plan definitivo preparado visualmente. Todavía no se ha renombrado ni guardado snapshot.");
   }
 
   async function handlePublish(nominationRun) {
@@ -1695,6 +1957,9 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
         savingId={savingId}
         savingChangeableId={savingChangeableId}
         changeablePanelRef={changeablePanelRef}
+        preparedChangeablePlan={preparedChangeablePlan}
+        onClosePreparedChangeablePlan={() => setPreparedChangeablePlan(null)}
+        onPrepareDefinitiveNomination={handlePrepareDefinitiveNomination}
       />
     </section>
   );
