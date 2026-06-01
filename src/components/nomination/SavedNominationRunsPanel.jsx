@@ -9,6 +9,7 @@ import {
   resetChangeableWorkRequestDecision,
   reduceChangeableWorkRequest,
   changeShiftChangeableWorkRequest,
+  prepareChangeableDefinitivePlan,
 } from "../../api/nominationRunApi";
 import NominationVisualResult from "./NominationVisualResult";
 
@@ -410,15 +411,21 @@ function buildPreparedChangeablePlan(nominationRun) {
 }
 
 function PreparedChangeablePlanPanel({ preparedPlan, onClose }) {
-  if (!Array.isArray(preparedPlan) || preparedPlan.length === 0) {
+  const planItems = Array.isArray(preparedPlan)
+    ? preparedPlan
+    : preparedPlan?.plan || [];
+
+  if (!Array.isArray(planItems) || planItems.length === 0) {
     return null;
   }
 
-  const includedCount = preparedPlan.filter(
+  const includedCount = planItems.filter(
     (item) => item.isIncludedInFinalNomination
   ).length;
 
-  const cancelledCount = preparedPlan.length - includedCount;
+  const cancelledCount = planItems.length - includedCount;
+
+  const backendSummary = preparedPlan?.summary || null;
 
   return (
     <div className="mb-5 rounded-3xl border border-sky-300 bg-sky-50 p-5 shadow-sm">
@@ -429,10 +436,14 @@ function PreparedChangeablePlanPanel({ preparedPlan, onClose }) {
           </div>
 
           <p className="mt-2 max-w-4xl text-sm font-bold leading-6 text-sky-900">
-            Esto todavía no renombra ni guarda snapshots. Solo muestra cómo
-            quedaría la ventana aplicando las decisiones tomadas sobre los
-            trabajos susceptibles.
+            {preparedPlan?.message ||
+              "Esto todavía no renombra ni guarda snapshots. Solo muestra cómo quedaría la ventana aplicando las decisiones tomadas sobre los trabajos susceptibles."}
           </p>
+          {preparedPlan?.safeMode && (
+            <div className="mt-2 inline-flex rounded-full bg-white px-3 py-1 text-xs font-black uppercase tracking-wide text-sky-800 ring-1 ring-sky-200">
+              Modo seguro: sin renombrar ni guardar snapshots
+            </div>
+        )}
         </div>
 
         <button
@@ -450,7 +461,7 @@ function PreparedChangeablePlanPanel({ preparedPlan, onClose }) {
             Susceptibles revisados
           </div>
           <div className="mt-1 text-2xl font-black text-slate-950">
-            {preparedPlan.length}
+            {planItems.length}
           </div>
         </div>
 
@@ -474,7 +485,7 @@ function PreparedChangeablePlanPanel({ preparedPlan, onClose }) {
       </div>
 
       <div className="mt-5 space-y-3">
-        {preparedPlan.map((item) => (
+        {planItems.map((item) => (
           <div
             key={item.workRequestId}
             className="rounded-3xl border border-sky-200 bg-white p-4 shadow-sm"
@@ -1375,7 +1386,7 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
     }
   }
 
-  function handlePrepareDefinitiveNomination(nominationRun) {
+  async function handlePrepareDefinitiveNomination(nominationRun) {
     const summary = buildChangeableDecisionSummary(nominationRun);
 
     if (!summary.total) {
@@ -1390,10 +1401,43 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
       return;
     }
 
-    const plan = buildPreparedChangeablePlan(nominationRun);
+    const confirmed = window.confirm(
+      "¿Preparar el plan definitivo de este nombramiento aplicando las decisiones de susceptibles? Todavía no se renombra ni se guarda snapshot."
+    );
 
-    setPreparedChangeablePlan(plan);
-    setSuccessMessage("Plan definitivo preparado visualmente. Todavía no se ha renombrado ni guardado snapshot.");
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setSavingId(nominationRun._id);
+      setErrorMessage("");
+      setSuccessMessage("");
+      setPreparedChangeablePlan(null);
+
+      const result = await prepareChangeableDefinitivePlan(nominationRun._id);
+
+      if (!result.success) {
+        throw new Error(
+          result.message || "No se pudo preparar el plan definitivo"
+        );
+      }
+
+      setPreparedChangeablePlan(result.data);
+
+      setSuccessMessage(
+        result.data?.message ||
+          "Plan definitivo preparado desde backend. Todavía no se ha renombrado ni guardado snapshot."
+      );
+    } catch (error) {
+      setErrorMessage(
+        error.response?.data?.message ||
+          error.message ||
+          "Error preparando el plan definitivo de susceptibles"
+      );
+    } finally {
+      setSavingId(null);
+    }
   }
 
   async function handlePublish(nominationRun) {
