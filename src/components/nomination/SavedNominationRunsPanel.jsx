@@ -287,6 +287,7 @@ function buildChangeableDecisionSummary(nominationRun) {
     cancelled: 0,
     reduced: 0,
     shifted: 0,
+    allResolved: false,
   };
 
   for (const workRequest of changeableWorkRequests) {
@@ -318,6 +319,7 @@ function buildChangeableDecisionSummary(nominationRun) {
     summary.pending += 1;
   }
 
+  summary.allResolved = summary.total > 0 && summary.pending === 0;
   return summary;
 }
 
@@ -639,9 +641,9 @@ function ChangeableWorkRequestsPanel({
           </div>
 
           <p className="mt-2 max-w-4xl text-sm font-bold leading-6 text-amber-900">
-            Estos trabajos se publicaron como provisionales. Antes de nombrar la
-            siguiente ventana, deberían confirmarse, reducirse, modificarse o
-            cancelarse para que el estado operativo final sea correcto.
+            {decisionSummary.allResolved
+              ? "Todos los trabajos susceptibles tienen una decisión tomada. El siguiente paso será preparar el nombramiento definitivo aplicando esas decisiones."
+              : "Estos trabajos se publicaron como provisionales. Antes de nombrar la siguiente ventana, deberían confirmarse, reducirse, modificarse o cancelarse para que el estado operativo final sea correcto."}
           </p>
         </div>
 
@@ -677,6 +679,34 @@ function ChangeableWorkRequestsPanel({
           </div>
         </div>
       </div>
+
+      {decisionSummary.allResolved && (
+        <div className="mt-5 rounded-3xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-black uppercase tracking-wide text-emerald-900">
+                Susceptibles resueltos
+              </div>
+
+              <p className="mt-1 text-sm font-bold leading-6 text-emerald-900">
+                Ya no queda ningún trabajo susceptible pendiente. Cuando activemos
+                la siguiente fase, este botón preparará una nueva simulación
+                definitiva aplicando confirmaciones, cancelaciones, reducciones y
+                cambios de horario.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              disabled
+              className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white opacity-60"
+              title="Todavía no renombra. Lo activaremos en la siguiente fase."
+            >
+              Preparar nombramiento definitivo
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="mt-5 space-y-3">
         {changeableWorkRequests.map((workRequest, index) => {
