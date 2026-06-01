@@ -11,6 +11,7 @@ import {
   changeShiftChangeableWorkRequest,
   prepareChangeableDefinitivePlan,
   prepareChangeableDefinitiveSimulation,
+  publishChangeableDefinitiveNomination,
 } from "../../api/nominationRunApi";
 import NominationVisualResult from "./NominationVisualResult";
 
@@ -1170,6 +1171,7 @@ function SelectedNominationRunDetail({
   savingId,
   savingChangeableId,
   changeablePanelRef,
+  onPublishDefinitiveChangeableNomination,
 }) {
   if (!selectedRun) {
     return null;
@@ -1313,13 +1315,24 @@ function SelectedNominationRunDetail({
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={onClosePreparedChangeableSimulation}
-              className="rounded-2xl bg-white px-4 py-3 text-sm font-black text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
-            >
-              Cerrar simulación
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={() => onPublishDefinitiveChangeableNomination(selectedRun)}
+                className="rounded-2xl bg-purple-700 px-4 py-3 text-sm font-black text-white hover:bg-purple-800 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {isSaving ? "Publicando definitivo..." : "Publicar definitivo"}
+              </button>
+
+              <button
+                type="button"
+                onClick={onClosePreparedChangeableSimulation}
+                className="rounded-2xl bg-white px-4 py-3 text-sm font-black text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+              >
+                Cerrar simulación
+              </button>
+            </div>
           </div>
 
           <NominationVisualResult simulationResult={preparedChangeableSimulation} />
@@ -1523,6 +1536,78 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
         error.response?.data?.message ||
           error.message ||
           "Error publicando nombramiento"
+      );
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function handlePublishDefinitiveChangeableNomination(nominationRun) {
+    if (!nominationRun?._id) {
+      setErrorMessage("No hay nombramiento seleccionado para publicar definitivo");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `¿Publicar el nombramiento definitivo aplicando las decisiones de susceptibles?\n\nSe creará un nombramiento definitivo nuevo, se guardarán los snapshots definitivos y el nombramiento provisional quedará reemplazado.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setSavingId(nominationRun._id);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      const result = await publishChangeableDefinitiveNomination(
+        nominationRun._id
+      );
+
+      if (!result.success) {
+        throw new Error(
+          result.message ||
+            "No se pudo publicar el nombramiento definitivo de susceptibles"
+        );
+      }
+
+      const definitiveNominationRunId =
+        result.data?.summary?.definitiveNominationRunId ||
+        result.data?.definitiveNominationRun?._id ||
+        result.data?.nominationRun?._id ||
+        null;
+
+      setSuccessMessage(
+        result.message ||
+          "Nombramiento definitivo publicado correctamente"
+      );
+
+      setPreparedChangeablePlan(null);
+      setPreparedChangeableSimulation(null);
+
+      await loadNominationRuns();
+
+      if (definitiveNominationRunId) {
+        const detailResult = await getNominationRunById(
+          definitiveNominationRunId
+        );
+
+        if (detailResult.success) {
+          setSelectedRun(detailResult.data);
+        }
+      } else {
+        const detailResult = await getNominationRunById(nominationRun._id);
+
+        if (detailResult.success) {
+          setSelectedRun(detailResult.data);
+        }
+      }
+    } catch (error) {
+      setErrorMessage(
+        error.response?.data?.message ||
+          error.message ||
+          "Error publicando el nombramiento definitivo de susceptibles"
       );
     } finally {
       setSavingId(null);
@@ -2057,6 +2142,9 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
         }
         onClosePreparedChangeablePlan={() => setPreparedChangeablePlan(null)}
         onPrepareDefinitiveNomination={handlePrepareDefinitiveNomination}
+        onPublishDefinitiveChangeableNomination={
+          handlePublishDefinitiveChangeableNomination
+        }
       />
     </section>
   );

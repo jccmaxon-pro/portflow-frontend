@@ -124,3 +124,13 @@ export async function prepareChangeableDefinitivePublicationPreview(
 
   return response.data;
 }
+
+export async function publishChangeableDefinitiveNomination(
+  nominationRunId
+) {
+  const response = await apiClient.post(
+    `/nomination-runs/${nominationRunId}/changeables/publish-definitive`
+  );
+
+  return response.data;
+}
