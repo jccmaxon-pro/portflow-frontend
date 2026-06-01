@@ -1468,7 +1468,11 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
     }
 
     setPreparedChangeablePlan(result.data);
-    setPreparedChangeableSimulation(result.data?.simulationResult || null);
+    setPreparedChangeableSimulation(
+      result.data?.combinedDefinitiveResult ||
+        result.data?.simulationResult ||
+        null
+    );
 
     setSuccessMessage(
       result.data?.message ||
