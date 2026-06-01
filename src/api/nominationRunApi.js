@@ -114,3 +114,13 @@ export async function prepareChangeableDefinitiveSimulation(nominationRunId) {
 
   return response.data;
 }
+
+export async function prepareChangeableDefinitivePublicationPreview(
+  nominationRunId
+) {
+  const response = await apiClient.post(
+    `/nomination-runs/${nominationRunId}/changeables/prepare-definitive-publication-preview`
+  );
+
+  return response.data;
+}
