@@ -10,6 +10,7 @@ import {
   reduceChangeableWorkRequest,
   changeShiftChangeableWorkRequest,
   prepareChangeableDefinitivePlan,
+  prepareChangeableDefinitiveSimulation,
 } from "../../api/nominationRunApi";
 import NominationVisualResult from "./NominationVisualResult";
 
@@ -425,8 +426,6 @@ function PreparedChangeablePlanPanel({ preparedPlan, onClose }) {
 
   const cancelledCount = planItems.length - includedCount;
 
-  const backendSummary = preparedPlan?.summary || null;
-
   return (
     <div className="mb-5 rounded-3xl border border-sky-300 bg-sky-50 p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -535,7 +534,7 @@ function PreparedChangeablePlanPanel({ preparedPlan, onClose }) {
                     Original
                   </div>
                   <div className="mt-1 text-sm font-bold text-slate-700">
-                    {Object.entries(item.originalPositions)
+                    {Object.entries(item.originalPositions || {})
                       .map(([positionCode, amount]) => `${positionCode}: ${amount}`)
                       .join(" · ") || "-"}
                   </div>
@@ -546,7 +545,7 @@ function PreparedChangeablePlanPanel({ preparedPlan, onClose }) {
                     Definitivo previsto
                   </div>
                   <div className="mt-1 text-sm font-bold text-emerald-800">
-                    {Object.entries(item.finalPositions)
+                    {Object.entries(item.finalPositions || {})
                       .map(([positionCode, amount]) => `${positionCode}: ${amount}`)
                       .join(" · ") || "-"}
                   </div>
@@ -1165,6 +1164,8 @@ function SelectedNominationRunDetail({
   onCancelReduceChangeable,
   preparedChangeablePlan,
   onClosePreparedChangeablePlan,
+  preparedChangeableSimulation,
+  onClosePreparedChangeableSimulation,
   onPrepareDefinitiveNomination,
   savingId,
   savingChangeableId,
@@ -1292,6 +1293,39 @@ function SelectedNominationRunDetail({
         onClose={onClosePreparedChangeablePlan}
       />
 
+      {preparedChangeableSimulation && (
+        <div className="mb-5 rounded-3xl border border-purple-300 bg-purple-50 p-5 shadow-sm">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="text-sm font-black uppercase tracking-wide text-purple-900">
+                Simulación definitiva del nombramiento
+              </div>
+
+              <p className="mt-2 max-w-4xl text-sm font-bold leading-6 text-purple-900">
+                Esta es la simulación real generada por el motor aplicando las
+                decisiones de susceptibles. El trabajo fijo de 02_08 se mantiene y
+                solo se han transformado los trabajos susceptibles. Todavía no se
+                publica ni se guarda snapshot.
+              </p>
+
+              <div className="mt-2 inline-flex rounded-full bg-white px-3 py-1 text-xs font-black uppercase tracking-wide text-purple-800 ring-1 ring-purple-200">
+                Modo seguro: preview sin snapshot
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClosePreparedChangeableSimulation}
+              className="rounded-2xl bg-white px-4 py-3 text-sm font-black text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+            >
+              Cerrar simulación
+            </button>
+          </div>
+
+          <NominationVisualResult simulationResult={preparedChangeableSimulation} />
+        </div>
+      )}
+
       <NominationVisualResult simulationResult={selectedRun.result} />
     </section>
   );
@@ -1308,6 +1342,11 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
   const [selectedRun, setSelectedRun] = useState(null);
   const [loadingDetailId, setLoadingDetailId] = useState(null);
   const [preparedChangeablePlan, setPreparedChangeablePlan] = useState(null);
+
+  const [
+  preparedChangeableSimulation,
+  setPreparedChangeableSimulation,
+] = useState(null);
 
   const changeablePanelRef = useRef(null);
 
@@ -1373,6 +1412,7 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
       }
 
       setPreparedChangeablePlan(null);
+      setPreparedChangeableSimulation(null);
       setSelectedRun(result.data);
     } catch (error) {
       setSelectedRun(null);
@@ -1387,58 +1427,63 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
   }
 
   async function handlePrepareDefinitiveNomination(nominationRun) {
-    const summary = buildChangeableDecisionSummary(nominationRun);
+  const summary = buildChangeableDecisionSummary(nominationRun);
 
-    if (!summary.total) {
-      setErrorMessage("Este nombramiento no tiene trabajos susceptibles");
-      return;
-    }
+  if (!summary.total) {
+    setErrorMessage("Este nombramiento no tiene trabajos susceptibles");
+    return;
+  }
 
-    if (!summary.allResolved) {
-      setErrorMessage(
-        "Todavía hay trabajos susceptibles pendientes. Resuélvelos antes de preparar el definitivo."
-      );
-      return;
-    }
+  if (!summary.allResolved) {
+    setErrorMessage(
+      "Todavía hay trabajos susceptibles pendientes. Resuélvelos antes de preparar el definitivo."
+    );
+    return;
+  }
 
-    const confirmed = window.confirm(
-      "¿Preparar el plan definitivo de este nombramiento aplicando las decisiones de susceptibles? Todavía no se renombra ni se guarda snapshot."
+  const confirmed = window.confirm(
+    "¿Preparar la simulación definitiva de este nombramiento aplicando las decisiones de susceptibles?\n\nEl trabajo fijo de 02_08 se mantiene. Solo se recalculan los susceptibles. Todavía no se publica ni se guarda snapshot."
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    setSavingId(nominationRun._id);
+    setErrorMessage("");
+    setSuccessMessage("");
+    setPreparedChangeablePlan(null);
+    setPreparedChangeableSimulation(null);
+
+    const result = await prepareChangeableDefinitiveSimulation(
+      nominationRun._id
     );
 
-    if (!confirmed) {
-      return;
+    if (!result.success) {
+      throw new Error(
+        result.message ||
+          "No se pudo preparar la simulación definitiva"
+      );
     }
 
-    try {
-      setSavingId(nominationRun._id);
-      setErrorMessage("");
-      setSuccessMessage("");
-      setPreparedChangeablePlan(null);
+    setPreparedChangeablePlan(result.data);
+    setPreparedChangeableSimulation(result.data?.simulationResult || null);
 
-      const result = await prepareChangeableDefinitivePlan(nominationRun._id);
-
-      if (!result.success) {
-        throw new Error(
-          result.message || "No se pudo preparar el plan definitivo"
-        );
-      }
-
-      setPreparedChangeablePlan(result.data);
-
-      setSuccessMessage(
-        result.data?.message ||
-          "Plan definitivo preparado desde backend. Todavía no se ha renombrado ni guardado snapshot."
-      );
-    } catch (error) {
-      setErrorMessage(
-        error.response?.data?.message ||
-          error.message ||
-          "Error preparando el plan definitivo de susceptibles"
-      );
-    } finally {
-      setSavingId(null);
-    }
+    setSuccessMessage(
+      result.data?.message ||
+        "Simulación definitiva preparada desde backend. Todavía no se ha publicado ni guardado snapshot."
+    );
+  } catch (error) {
+    setErrorMessage(
+      error.response?.data?.message ||
+        error.message ||
+        "Error preparando la simulación definitiva de susceptibles"
+    );
+  } finally {
+    setSavingId(null);
   }
+}
 
   async function handlePublish(nominationRun) {
     const confirmed = window.confirm(
@@ -2002,6 +2047,10 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
         savingChangeableId={savingChangeableId}
         changeablePanelRef={changeablePanelRef}
         preparedChangeablePlan={preparedChangeablePlan}
+        preparedChangeableSimulation={preparedChangeableSimulation}
+        onClosePreparedChangeableSimulation={() =>
+          setPreparedChangeableSimulation(null)
+        }
         onClosePreparedChangeablePlan={() => setPreparedChangeablePlan(null)}
         onPrepareDefinitiveNomination={handlePrepareDefinitiveNomination}
       />

@@ -106,3 +106,11 @@ export async function prepareChangeableDefinitivePlan(nominationRunId) {
 
   return response.data;
 }
+
+export async function prepareChangeableDefinitiveSimulation(nominationRunId) {
+  const response = await apiClient.post(
+    `/nomination-runs/${nominationRunId}/changeables/prepare-definitive-simulation`
+  );
+
+  return response.data;
+}
