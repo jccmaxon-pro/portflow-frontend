@@ -12,7 +12,10 @@ import {
   prepareChangeableDefinitivePlan,
   prepareChangeableDefinitiveSimulation,
   publishChangeableDefinitiveNomination,
+  getReplacementCandidates,
+  replaceAssignmentManually,
 } from "../../api/nominationRunApi";
+
 import NominationVisualResult from "./NominationVisualResult";
 
 const DEFAULT_PREVIEW_PORT_ID = "69f210fe5417a1641d23188d";
@@ -1150,6 +1153,195 @@ function ChangeableWorkRequestsPanel({
   );
 }
 
+function ManualReplacementPanel({
+  replacementPanel,
+  reasonCode,
+  reasonText,
+  replacingAssignment,
+  onClose,
+  onChangeReasonCode,
+  onChangeReasonText,
+  onManualReplacement,
+}) {
+  const assignment = replacementPanel?.assignmentToReplace;
+  const candidates = replacementPanel?.candidates || [];
+  const selectableCandidates = candidates.filter(
+    (candidate) => candidate.isSelectable
+  );
+  const excludedCandidates = candidates.filter(
+    (candidate) => !candidate.isSelectable
+  );
+
+  return (
+    <div className="mb-5 rounded-3xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-black uppercase tracking-wide text-indigo-700">
+            Sustitución manual de trabajador
+          </p>
+
+          <h4 className="mt-1 text-xl font-black text-slate-950">
+            {assignment?.workerCode} - {assignment?.workerName}
+          </h4>
+
+          <p className="mt-2 text-sm font-bold text-slate-700">
+            {assignment?.positionCode} · {assignment?.shiftCode} ·{" "}
+            {assignment?.shipName || "-"} · {assignment?.berth?.name || "-"}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-2xl bg-white px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-100"
+        >
+          Cerrar
+        </button>
+      </div>
+
+      <div className="mt-5 grid gap-4 md:grid-cols-2">
+        <label className="block">
+          <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+            Motivo
+          </span>
+
+          <select
+            value={reasonCode}
+            onChange={(event) => onChangeReasonCode(event.target.value)}
+            className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800"
+          >
+            <option value="SICK_LEAVE">Baja / enfermedad</option>
+            <option value="NO_SHOW">No se presenta</option>
+            <option value="PERSONAL_REASON">Motivo personal</option>
+            <option value="OPERATIONAL_CHANGE">Cambio operativo</option>
+            <option value="OTHER">Otro motivo</option>
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+            Observación
+          </span>
+
+          <input
+            type="text"
+            value={reasonText}
+            onChange={(event) => onChangeReasonText(event.target.value)}
+            placeholder="Ej: avisa de que se ha puesto malo"
+            className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800"
+          />
+        </label>
+      </div>
+
+      <div className="mt-5 rounded-2xl bg-white p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h5 className="font-black text-slate-900">
+            Candidatos disponibles
+          </h5>
+
+          <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+            {selectableCandidates.length} disponibles
+          </span>
+        </div>
+
+        {selectableCandidates.length === 0 ? (
+          <p className="mt-3 text-sm font-bold text-slate-500">
+            No hay candidatos disponibles para esta sustitución.
+          </p>
+        ) : (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[760px] border-collapse">
+              <thead>
+                <tr className="border-b border-slate-100 text-left text-xs font-black uppercase tracking-wide text-slate-500">
+                  <th className="px-3 py-3">Trabajador</th>
+                  <th className="px-3 py-3">Grupo</th>
+                  <th className="px-3 py-3">Lista</th>
+                  <th className="px-3 py-3">Motivo</th>
+                  <th className="px-3 py-3 text-right">Acción</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {selectableCandidates.map((candidate) => (
+                  <tr
+                    key={candidate.workerId}
+                    className="border-b border-slate-100"
+                  >
+                    <td className="px-3 py-3">
+                      <div className="font-black text-slate-900">
+                        {candidate.workerCode} - {candidate.fullName}
+                      </div>
+                      <div className="text-xs font-bold text-slate-500">
+                        Orden {candidate.rotationOrder ?? "-"}
+                      </div>
+                    </td>
+
+                    <td className="px-3 py-3 text-sm font-bold text-slate-700">
+                      {candidate.mainProfessionalGroup || "-"}
+                    </td>
+
+                    <td className="px-3 py-3 text-sm font-bold text-slate-700">
+                      {candidate.rotationListCode || "-"}
+                    </td>
+
+                    <td className="px-3 py-3 text-sm text-slate-600">
+                      {candidate.reason || "-"}
+                    </td>
+
+                    <td className="px-3 py-3 text-right">
+                      <button
+                        type="button"
+                        disabled={replacingAssignment}
+                        onClick={() =>
+                          onManualReplacement({
+                            candidate,
+                            assignmentIndex: replacementPanel.assignmentIndex,
+                            reasonCode,
+                            reasonText,
+                          })
+                        }
+                        className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {replacingAssignment
+                          ? "Sustituyendo..."
+                          : "Sustituir"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {excludedCandidates.length > 0 && (
+        <details className="mt-4 rounded-2xl bg-white p-4">
+          <summary className="cursor-pointer font-black text-slate-700">
+            Ver excluidos ({excludedCandidates.length})
+          </summary>
+
+          <div className="mt-3 space-y-2">
+            {excludedCandidates.map((candidate) => (
+              <div
+                key={candidate.workerId}
+                className="rounded-xl bg-slate-50 p-3 text-sm"
+              >
+                <div className="font-black text-slate-800">
+                  {candidate.workerCode} - {candidate.fullName}
+                </div>
+                <div className="font-bold text-slate-500">
+                  {candidate.reason || "Excluido"}
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
 function SelectedNominationRunDetail({
   selectedRun,
   onClose,
@@ -1172,6 +1364,15 @@ function SelectedNominationRunDetail({
   savingChangeableId,
   changeablePanelRef,
   onPublishDefinitiveChangeableNomination,
+  onWorkerClickForReplacement,
+  replacementPanel,
+  replacementReasonCode,
+  replacementReasonText,
+  replacingAssignment,
+  onCloseReplacementPanel,
+  onChangeReplacementReasonCode,
+  onChangeReplacementReasonText,
+  onManualReplacement,
 }) {
   if (!selectedRun) {
     return null;
@@ -1339,7 +1540,23 @@ function SelectedNominationRunDetail({
         </div>
       )}
 
-      <NominationVisualResult simulationResult={selectedRun.result} />
+      {replacementPanel && (
+        <ManualReplacementPanel
+          replacementPanel={replacementPanel}
+          reasonCode={replacementReasonCode}
+          reasonText={replacementReasonText}
+          replacingAssignment={replacingAssignment}
+          onClose={onCloseReplacementPanel}
+          onChangeReasonCode={onChangeReplacementReasonCode}
+          onChangeReasonText={onChangeReplacementReasonText}
+          onManualReplacement={onManualReplacement}
+        />
+      )}
+
+      <NominationVisualResult
+        simulationResult={selectedRun.result}
+        onWorkerClick={onWorkerClickForReplacement}
+      />
     </section>
   );
 }
@@ -1355,6 +1572,177 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
   const [selectedRun, setSelectedRun] = useState(null);
   const [loadingDetailId, setLoadingDetailId] = useState(null);
   const [preparedChangeablePlan, setPreparedChangeablePlan] = useState(null);
+
+  const [replacementPanel, setReplacementPanel] = useState(null);
+  const [loadingReplacementCandidates, setLoadingReplacementCandidates] =
+    useState(false);
+  const [replacingAssignment, setReplacingAssignment] = useState(false);
+  const [replacementReasonCode, setReplacementReasonCode] =
+    useState("SICK_LEAVE");
+  const [replacementReasonText, setReplacementReasonText] = useState("");
+
+  const [selectedAssignmentForReplacement, setSelectedAssignmentForReplacement] =
+    useState(null);
+
+  const [selectedAssignmentIndexForReplacement, setSelectedAssignmentIndexForReplacement] =
+    useState(null);
+
+  const [selectedReplacementCandidate, setSelectedReplacementCandidate] =
+    useState(null);
+
+  const [replacementCandidatesData, setReplacementCandidatesData] = useState(null);
+
+  const [replacementCandidatesError, setReplacementCandidatesError] = useState("");
+
+  const [savingManualReplacement, setSavingManualReplacement] = useState(false);
+  
+
+
+
+  const handleWorkerClickForReplacement = async (assignment) => {
+    if (!assignment || !selectedRun?._id) {
+      return;
+    }
+
+    const assignments = selectedRun?.result?.assignments || [];
+
+    const assignmentIndex = assignments.findIndex((item) => {
+      return (
+        String(item.workerId || "") === String(assignment.workerId || "") &&
+        String(item.workRequestId || "") === String(assignment.workRequestId || "") &&
+        String(item.positionCode || "") === String(assignment.positionCode || "") &&
+        String(item.unitNumber || "") === String(assignment.unitNumber || "") &&
+        String(item.shiftCode || "") === String(assignment.shiftCode || "")
+      );
+    });
+
+    if (assignmentIndex < 0) {
+      setErrorMessage(
+        "No se ha podido localizar esta asignación dentro del nombramiento."
+      );
+      return;
+    }
+
+    setSelectedAssignmentForReplacement(assignment);
+    setSelectedAssignmentIndexForReplacement(assignmentIndex);
+    setSelectedReplacementCandidate(null);
+    setReplacementCandidatesData(null);
+    setReplacementCandidatesError("");
+    setLoadingReplacementCandidates(true);
+
+    try {
+      const result = await getReplacementCandidates({
+        nominationRunId: selectedRun._id,
+        assignmentIndex,
+      });
+
+      if (!result.success) {
+        throw new Error(
+          result.message || "No se pudieron obtener candidatos de sustitución"
+        );
+      }
+
+      setReplacementCandidatesData(result.data);
+    } catch (error) {
+      setReplacementCandidatesError(
+        error.response?.data?.message ||
+          error.message ||
+          "Error obteniendo candidatos de sustitución"
+      );
+    } finally {
+      setLoadingReplacementCandidates(false);
+    }
+  };
+
+  const closeReplacementPanel = () => {
+    setSelectedAssignmentForReplacement(null);
+    setSelectedAssignmentIndexForReplacement(null);
+    setSelectedReplacementCandidate(null);
+    setReplacementCandidatesData(null);
+    setReplacementCandidatesError("");
+    setLoadingReplacementCandidates(false);
+    setReplacementReasonCode("SICK_LEAVE");
+    setReplacementReasonText("");
+  };
+
+  async function handleConfirmManualReplacement() {
+    if (!selectedRun?._id) {
+      setErrorMessage("No hay nombramiento seleccionado.");
+      return;
+    }
+
+    if (selectedAssignmentIndexForReplacement === null) {
+      setErrorMessage("No se ha localizado la asignación a sustituir.");
+      return;
+    }
+
+    if (!selectedReplacementCandidate?.workerId) {
+      setErrorMessage("Selecciona un candidato de sustitución.");
+      return;
+    }
+
+    const oldWorkerLabel = selectedAssignmentForReplacement
+      ? `${selectedAssignmentForReplacement.workerCode} - ${selectedAssignmentForReplacement.workerName}`
+      : "trabajador actual";
+
+    const newWorkerLabel = `${selectedReplacementCandidate.workerCode} - ${
+      selectedReplacementCandidate.fullName ||
+      selectedReplacementCandidate.workerName ||
+      "Sin nombre"
+    }`;
+
+    const confirmed = window.confirm(
+      `¿Confirmar sustitución manual?\n\nSale: ${oldWorkerLabel}\nEntra: ${newWorkerLabel}\n\nEl nombramiento publicado quedará actualizado.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setSavingManualReplacement(true);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      const result = await replaceAssignmentManually({
+        nominationRunId: selectedRun._id,
+        assignmentIndex: selectedAssignmentIndexForReplacement,
+        replacementWorkerId: selectedReplacementCandidate.workerId,
+        reasonCode: replacementReasonCode,
+        reasonText: replacementReasonText,
+      });
+
+      if (!result.success) {
+        throw new Error(
+          result.message || "No se pudo realizar la sustitución manual"
+        );
+      }
+
+      const detailResult = await getNominationRunById(selectedRun._id);
+
+      if (!detailResult.success) {
+        throw new Error(
+          detailResult.message ||
+            "La sustitución se hizo, pero no se pudo recargar el detalle"
+        );
+      }
+
+      setSelectedRun(detailResult.data);
+      closeReplacementPanel();
+
+      setSuccessMessage("Sustitución manual realizada correctamente.");
+
+      await loadNominationRuns();
+    } catch (error) {
+      setErrorMessage(
+        error.response?.data?.message ||
+          error.message ||
+          "Error realizando la sustitución manual"
+      );
+    } finally {
+      setSavingManualReplacement(false);
+    }
+  }
 
   const [
   preparedChangeableSimulation,
@@ -1437,6 +1825,75 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
     } finally {
       setLoadingDetailId(null);
     }
+  }
+
+  async function handleManualReplacement({
+    candidate,
+    assignmentIndex,
+    reasonCode,
+    reasonText,
+  }) {
+    if (!selectedRun?._id) {
+      setErrorMessage("No hay nombramiento seleccionado");
+      return;
+    }
+
+    if (!candidate?.workerId) {
+      setErrorMessage("No se ha seleccionado trabajador sustituto");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `¿Confirmar sustitución por ${candidate.workerCode} - ${candidate.fullName}?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setReplacingAssignment(true);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      const result = await replaceAssignmentManually({
+        nominationRunId: selectedRun._id,
+        assignmentIndex,
+        replacementWorkerId: candidate.workerId,
+        reasonCode,
+        reasonText,
+      });
+
+      if (!result.success) {
+        throw new Error(result.message || "No se pudo realizar la sustitución");
+      }
+
+      setSuccessMessage("Sustitución manual realizada correctamente");
+
+      const detailResult = await getNominationRunById(selectedRun._id);
+
+      if (detailResult.success) {
+        setSelectedRun(detailResult.data);
+      }
+
+      setReplacementPanel(null);
+      setReplacementReasonCode("SICK_LEAVE");
+      setReplacementReasonText("");
+
+      await loadNominationRuns();
+    } catch (error) {
+      setErrorMessage(
+        error.response?.data?.message ||
+          error.message ||
+          "Error realizando sustitución manual"
+      );
+    } finally {
+      setReplacingAssignment(false);
+    }
+  }
+
+  function handleCloseReplacementPanel() {
+    closeReplacementPanel();
   }
 
   async function handlePrepareDefinitiveNomination(nominationRun) {
@@ -1938,6 +2395,14 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
     }
   }
 
+  const replacementCandidates = replacementCandidatesData?.candidates || [];
+  const selectableReplacementCandidates = replacementCandidates.filter(
+    (candidate) => candidate.isSelectable
+  );
+  const excludedReplacementCandidates = replacementCandidates.filter(
+    (candidate) => !candidate.isSelectable
+  );
+
   return (
     <section className="mb-6 rounded-3xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 p-5">
@@ -2119,11 +2584,333 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
         </div>
       )}
 
+      {selectedAssignmentForReplacement && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
+          <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl">
+            <div className="border-b border-slate-200 px-6 py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900">
+                    Sustitución manual de trabajador
+                  </h2>
+
+                  <p className="mt-1 text-sm text-slate-500">
+                    Usa esta opción cuando un trabajador ya nombrado no pueda acudir y haya que sustituirlo manualmente.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closeReplacementPanel}
+                  className="rounded-lg px-3 py-1.5 text-sm font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-5 px-6 py-5">
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                <p className="text-xs font-black uppercase tracking-wide text-red-700">
+                  Trabajador a sustituir
+                </p>
+
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <span className="rounded-lg bg-red-600 px-3 py-1 text-sm font-black text-white">
+                    {selectedAssignmentForReplacement.workerCode}
+                  </span>
+
+                  <span className="text-base font-black text-slate-900">
+                    {selectedAssignmentForReplacement.workerName || "Sin nombre"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    Puesto
+                  </p>
+                  <p className="mt-1 font-black text-slate-900">
+                    {selectedAssignmentForReplacement.positionCode || "-"}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    Turno
+                  </p>
+                  <p className="mt-1 font-black text-slate-900">
+                    {selectedAssignmentForReplacement.shiftCode || "-"}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    Barco
+                  </p>
+                  <p className="mt-1 font-black text-slate-900">
+                    {selectedAssignmentForReplacement.shipName || "-"}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    Muelle
+                  </p>
+                  <p className="mt-1 font-black text-slate-900">
+                    {selectedAssignmentForReplacement.berth?.name ||
+                      selectedAssignmentForReplacement.berthName ||
+                      "-"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 p-4">
+                <label className="text-sm font-black text-slate-800">
+                  Motivo de la sustitución
+                </label>
+
+                <select
+                  className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                  defaultValue=""
+                >
+                  <option value="" disabled>
+                    Selecciona un motivo
+                  </option>
+                  <option value="ENFERMEDAD">Enfermedad</option>
+                  <option value="BAJA">Baja médica</option>
+                  <option value="ACCIDENTE">Accidente</option>
+                  <option value="NO_LOCALIZADO">No localizado</option>
+                  <option value="NO_PUEDE_ACUDIR">No puede acudir</option>
+                  <option value="ERROR_NOMBRAMIENTO">Error en nombramiento</option>
+                  <option value="OTRO">Otro motivo</option>
+                </select>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <p className="text-sm font-black text-slate-900">
+                  Motivo de la sustitución
+                </p>
+
+                <div className="mt-4 grid gap-4 md:grid-cols-[240px_1fr]">
+                  <label className="block">
+                    <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                      Motivo
+                    </span>
+
+                    <select
+                      value={replacementReasonCode}
+                      onChange={(event) => setReplacementReasonCode(event.target.value)}
+                      className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800"
+                    >
+                      <option value="SICK_LEAVE">Baja / enfermedad</option>
+                      <option value="NO_SHOW">No se presenta</option>
+                      <option value="PERSONAL_REASON">Motivo personal</option>
+                      <option value="OPERATIONAL_CHANGE">Cambio operativo</option>
+                      <option value="OTHER">Otro</option>
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                      Observación
+                    </span>
+
+                    <input
+                      type="text"
+                      value={replacementReasonText}
+                      onChange={(event) => setReplacementReasonText(event.target.value)}
+                      placeholder="Ej: avisa de que se ha puesto malo antes del turno"
+                      className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-black text-slate-900">
+                      Candidatos reales de sustitución
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Lista calculada por el backend aplicando habilitación, turno, descansos y trabajadores ya nombrados.
+                    </p>
+                  </div>
+
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
+                    {replacementCandidatesData?.summary?.selectableCandidates ?? selectableReplacementCandidates.length}
+                  </span>
+                </div>
+
+                {loadingReplacementCandidates ? (
+                  <div className="mt-4 rounded-xl bg-slate-50 p-4 text-sm font-bold text-slate-600">
+                    Cargando candidatos reales desde backend...
+                  </div>
+                ) : replacementCandidatesError ? (
+                  <div className="mt-4 rounded-xl bg-red-50 p-4 text-sm font-bold text-red-700">
+                    {replacementCandidatesError}
+                  </div>
+                ) : replacementCandidates.length === 0 ? (
+                  <div className="mt-4 rounded-xl bg-amber-50 p-4 text-sm font-bold text-amber-800">
+                    No se han encontrado candidatos de sustitución para este puesto.
+                  </div>
+                ) : (
+                  <div className="mt-4 space-y-4">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
+                        Disponibles
+                      </p>
+
+                      {selectableReplacementCandidates.length === 0 ? (
+                        <div className="mt-2 rounded-xl bg-amber-50 p-4 text-sm font-bold text-amber-800">
+                          No hay candidatos seleccionables.
+                        </div>
+                      ) : (
+                        <div className="mt-2 max-h-72 space-y-2 overflow-y-auto pr-1">
+                          {selectableReplacementCandidates.map((candidate) => {
+                            const isSelected =
+                              selectedReplacementCandidate?.workerId === candidate.workerId;
+
+                            return (
+                              <button
+                                key={candidate.workerId}
+                                type="button"
+                                onClick={() => setSelectedReplacementCandidate(candidate)}
+                                className={[
+                                  "w-full rounded-xl border p-3 text-left transition",
+                                  isSelected
+                                    ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100"
+                                    : "border-slate-200 bg-white hover:border-blue-300 hover:bg-slate-50",
+                                ].join(" ")}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-black text-white">
+                                        {candidate.workerCode}
+                                      </span>
+
+                                      <span className="text-sm font-black text-slate-900">
+                                        {candidate.fullName || candidate.workerName || "Sin nombre"}
+                                      </span>
+
+                                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-emerald-700 ring-1 ring-emerald-200">
+                                        Disponible
+                                      </span>
+                                    </div>
+
+                                    <p className="mt-2 text-xs font-bold text-slate-500">
+                                      {candidate.reason || "Candidato compatible"}
+                                    </p>
+                                  </div>
+
+                                  <div className="text-right text-xs font-bold text-slate-500">
+                                    <p>{candidate.rotationListCode || "-"}</p>
+                                    <p className="mt-1">
+                                      Orden: {candidate.rotationOrder ?? "-"}
+                                    </p>
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {excludedReplacementCandidates.length > 0 && (
+                      <details className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <summary className="cursor-pointer text-xs font-black uppercase tracking-wide text-slate-600">
+                          Ver excluidos ({excludedReplacementCandidates.length})
+                        </summary>
+
+                        <div className="mt-3 max-h-56 space-y-2 overflow-y-auto pr-1">
+                          {excludedReplacementCandidates.map((candidate) => (
+                            <div
+                              key={candidate.workerId}
+                              className="rounded-xl border border-slate-200 bg-white p-3 opacity-75"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="rounded-lg bg-slate-400 px-2.5 py-1 text-xs font-black text-white">
+                                      {candidate.workerCode}
+                                    </span>
+
+                                    <span className="text-sm font-black text-slate-700">
+                                      {candidate.fullName || candidate.workerName || "Sin nombre"}
+                                    </span>
+
+                                    <span className="rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-red-700 ring-1 ring-red-200">
+                                      Excluido
+                                    </span>
+                                  </div>
+
+                                  <p className="mt-2 text-xs font-bold text-red-700">
+                                    {candidate.reason || "No seleccionable"}
+                                  </p>
+                                </div>
+
+                                <div className="text-right text-xs font-bold text-slate-500">
+                                  <p>{candidate.rotationListCode || "-"}</p>
+                                  <p className="mt-1">
+                                    Orden: {candidate.rotationOrder ?? "-"}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
+              <button
+                type="button"
+                onClick={closeReplacementPanel}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                disabled={!selectedReplacementCandidate || savingManualReplacement}
+                onClick={handleConfirmManualReplacement}
+                className={[
+                  "rounded-xl px-4 py-2 text-sm font-black text-white",
+                  selectedReplacementCandidate && !savingManualReplacement
+                    ? "bg-blue-600 hover:bg-blue-700"
+                    : "bg-slate-300",
+                ].join(" ")}
+                title={
+                  selectedReplacementCandidate
+                    ? "Confirmar sustitución manual"
+                    : "Selecciona primero un candidato"
+                }
+              >
+                {savingManualReplacement ? "Sustituyendo..." : "Confirmar sustitución"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <SelectedNominationRunDetail
-        selectedRun={selectedRun}
-        onClose={() => setSelectedRun(null)}
+        selectedRun={selectedRun} 
+        onClose={() => {
+          setSelectedRun(null);
+          closeReplacementPanel();
+        }}
         onPublish={handlePublish}
         onCancel={handleCancel}
+        onWorkerClickForReplacement={handleWorkerClickForReplacement}
         onConfirmFullChangeable={handleConfirmFullChangeable}
         onCancelChangeable={handleCancelChangeableWorkRequest}
         onReduceChangeable={handleReduceChangeableWorkRequest}
@@ -2137,6 +2924,14 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
         changeablePanelRef={changeablePanelRef}
         preparedChangeablePlan={preparedChangeablePlan}
         preparedChangeableSimulation={preparedChangeableSimulation}
+        replacementPanel={replacementPanel}
+        replacementReasonCode={replacementReasonCode}
+        replacementReasonText={replacementReasonText}
+        replacingAssignment={replacingAssignment}
+        onCloseReplacementPanel={handleCloseReplacementPanel}
+        onChangeReplacementReasonCode={setReplacementReasonCode}
+        onChangeReplacementReasonText={setReplacementReasonText}
+        onManualReplacement={handleManualReplacement}
         onClosePreparedChangeableSimulation={() =>
           setPreparedChangeableSimulation(null)
         }

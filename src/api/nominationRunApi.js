@@ -134,3 +134,33 @@ export async function publishChangeableDefinitiveNomination(
 
   return response.data;
 }
+
+export async function getReplacementCandidates({
+  nominationRunId,
+  assignmentIndex,
+}) {
+  const response = await apiClient.get(
+    `/nomination-runs/${nominationRunId}/assignments/${assignmentIndex}/replacement-candidates`
+  );
+
+  return response.data;
+}
+
+export async function replaceAssignmentManually({
+  nominationRunId,
+  assignmentIndex,
+  replacementWorkerId,
+  reasonCode,
+  reasonText = "",
+}) {
+  const response = await apiClient.post(
+    `/nomination-runs/${nominationRunId}/assignments/${assignmentIndex}/manual-replacement`,
+    {
+      replacementWorkerId,
+      reasonCode,
+      reasonText,
+    }
+  );
+
+  return response.data;
+}

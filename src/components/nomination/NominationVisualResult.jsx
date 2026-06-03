@@ -12,7 +12,7 @@ function sameHighlightedWorker({ assignment, highlightedWorkerCode }) {
   return String(assignment.workerCode) === String(highlightedWorkerCode);
 }
 
-function WorkerBadge({ assignment, highlightedWorkerCode }) {
+function WorkerBadge({ assignment, highlightedWorkerCode, onWorkerClick }) {
   if (!assignment) {
     return null;
   }
@@ -27,28 +27,60 @@ function WorkerBadge({ assignment, highlightedWorkerCode }) {
     highlightedWorkerCode,
   });
 
+  const canClickWorker = typeof onWorkerClick === "function";
+
+  const handleClick = () => {
+    if (!canClickWorker) {
+      return;
+    }
+
+    onWorkerClick(assignment);
+  };
+
   if (isHighlighted) {
     return (
-      <span
-        className="inline-flex min-w-12 justify-center rounded-lg bg-blue-600 px-3 py-1 text-sm font-black text-white ring-2 ring-blue-300"
-        title={assignment.reason || "Tu asignación"}
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={!canClickWorker}
+        className={`inline-flex min-w-12 justify-center rounded-lg bg-blue-600 px-3 py-1 text-sm font-black text-white ring-2 ring-blue-300 ${
+          canClickWorker
+            ? "cursor-pointer hover:bg-blue-700"
+            : "cursor-default"
+        }`}
+        title={
+          canClickWorker
+            ? "Pulsa para preparar una sustitución manual"
+            : assignment.reason || "Tu asignación"
+        }
       >
         {assignment.workerCode}
-      </span>
+      </button>
     );
   }
 
-  return (
-    <span
-      className={`inline-flex min-w-10 justify-center rounded-lg px-2.5 py-1 text-sm font-black ${
-        isDouble
-          ? "bg-amber-100 text-amber-900 ring-1 ring-amber-200"
-          : "bg-slate-100 text-slate-900 ring-1 ring-slate-200"
-      }`}
-      title={assignment.reason || ""}
-    >
-      {assignment.workerCode}
-    </span>
+    return (
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={!canClickWorker}
+        className={`inline-flex min-w-10 justify-center rounded-lg px-2.5 py-1 text-sm font-black ${
+          isDouble
+            ? "bg-amber-100 text-amber-900 ring-1 ring-amber-200"
+            : "bg-slate-100 text-slate-900 ring-1 ring-slate-200"
+        } ${
+          canClickWorker
+            ? "cursor-pointer hover:scale-105 hover:ring-2 hover:ring-blue-300"
+            : "cursor-default"
+        }`}
+        title={
+          canClickWorker
+            ? "Pulsa para preparar una sustitución manual"
+            : assignment.reason || ""
+        }
+      >
+        {assignment.workerCode}
+      </button>
   );
 }
 
@@ -60,7 +92,7 @@ function MissingBadge() {
   );
 }
 
-function PositionLine({ row, highlightedWorkerCode }) {
+function PositionLine({ row, highlightedWorkerCode, onWorkerClick }) {
   return (
     <div className="grid grid-cols-[150px_1fr] gap-3 border-t border-slate-100 px-4 py-2.5 first:border-t-0">
       <div>
@@ -78,6 +110,7 @@ function PositionLine({ row, highlightedWorkerCode }) {
             key={`${assignment.workerId}-${assignment.positionCode}-${assignment.unitNumber}-${index}`}
             assignment={assignment}
             highlightedWorkerCode={highlightedWorkerCode}
+            onWorkerClick={onWorkerClick}
           />
         ))}
 
@@ -95,7 +128,7 @@ function PositionLine({ row, highlightedWorkerCode }) {
   );
 }
 
-function WorkRequestSheet({ entry, highlightedWorkerCode }) {
+function WorkRequestSheet({ entry, highlightedWorkerCode, onWorkerClick }) {
   const workRequest = entry.workRequest;
   const rows = buildPositionRows(entry);
 
@@ -129,6 +162,7 @@ function WorkRequestSheet({ entry, highlightedWorkerCode }) {
             key={row.originalPositionCode}
             row={row}
             highlightedWorkerCode={highlightedWorkerCode}
+            onWorkerClick={onWorkerClick}
           />
         ))}
       </div>
@@ -136,7 +170,7 @@ function WorkRequestSheet({ entry, highlightedWorkerCode }) {
   );
 }
 
-function BlockSheet({ block, highlightedWorkerCode }) {
+function BlockSheet({ block, highlightedWorkerCode, onWorkerClick }) {
   return (
     <section className="rounded-3xl border border-slate-300 bg-slate-100 p-4 shadow-sm">
       <header className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-950 px-5 py-4 text-white">
@@ -169,6 +203,7 @@ function BlockSheet({ block, highlightedWorkerCode }) {
             key={entry.workRequest._id}
             entry={entry}
             highlightedWorkerCode={highlightedWorkerCode}
+            onWorkerClick={onWorkerClick}
           />
         ))}
       </div>
@@ -313,6 +348,7 @@ export default function NominationVisualResult({
   simulationResult,
   highlightedWorkerCode = null,
   showRestExclusions = true,
+  onWorkerClick = null,
 }) {
   if (!simulationResult) {
     return null;
@@ -360,6 +396,7 @@ export default function NominationVisualResult({
             key={`${block.blockLabel}-${block.nominationWindowOrder}`}
             block={block}
             highlightedWorkerCode={highlightedWorkerCode}
+            onWorkerClick={onWorkerClick}
           />
         ))
       )}
