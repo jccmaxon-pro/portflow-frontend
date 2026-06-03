@@ -31,6 +31,44 @@ export const SHIFT_ORDER = {
   "20_02": 60,
 };
 
+function getBerthSortValue(workRequest) {
+  const berth = workRequest?.berth || {};
+
+  // 1) Si algún día guardas berth.number bien, usamos eso.
+  if (berth.number !== null && berth.number !== undefined) {
+    const numberValue = Number(berth.number);
+
+    if (!Number.isNaN(numberValue)) {
+      return numberValue;
+    }
+  }
+
+  // 2) Si viene código tipo "M5", "M9", "MUELLE_6", etc.
+  const codeText = String(berth.code || "").toUpperCase();
+  const codeMatch = codeText.match(/\d+/);
+
+  if (codeMatch) {
+    return Number(codeMatch[0]);
+  }
+
+  // 3) Si viene nombre tipo "Muelle 5", "Muelle 9", etc.
+  const nameText = String(berth.name || "").toUpperCase();
+  const nameMatch = nameText.match(/\d+/);
+
+  if (nameMatch) {
+    return Number(nameMatch[0]);
+  }
+
+  // 4) Último recurso: berth.order, aunque ahora mismo parece poco fiable.
+  const orderValue = Number(berth.order);
+
+  if (!Number.isNaN(orderValue)) {
+    return orderValue;
+  }
+
+  return 999;
+}
+
 
 export function formatDateOnly(dateValue) {
   if (!dateValue) return "";
@@ -200,13 +238,8 @@ export function sortWorkRequests(entries) {
       return windowOrderA - windowOrderB;
     }
 
-    const requestOrderA = a.workRequestOrderInWindow ?? 999;
-    const requestOrderB = b.workRequestOrderInWindow ?? 999;
-
-    if (requestOrderA !== requestOrderB) {
-      return requestOrderA - requestOrderB;
-    }
-
+    // Primero respetamos el turno operativo.
+    // Ejemplo: 08_18 antes que 08_14 si así lo define SHIFT_ORDER.
     const shiftOrderA = SHIFT_ORDER[wrA.shiftCode] ?? 999;
     const shiftOrderB = SHIFT_ORDER[wrB.shiftCode] ?? 999;
 
@@ -214,11 +247,21 @@ export function sortWorkRequests(entries) {
       return shiftOrderA - shiftOrderB;
     }
 
-    const berthOrderA = wrA.berth?.order ?? 999;
-    const berthOrderB = wrB.berth?.order ?? 999;
+    // Dentro del mismo turno, muelle más bajo primero:
+    // M5 antes que M6, M6 antes que M7, M7 antes que M9.
+    const berthOrderA = getBerthSortValue(wrA);
+    const berthOrderB = getBerthSortValue(wrB);
 
     if (berthOrderA !== berthOrderB) {
       return berthOrderA - berthOrderB;
+    }
+
+    // Si coinciden turno y muelle, mantenemos el orden operativo que venga del backend.
+    const requestOrderA = a.workRequestOrderInWindow ?? 999;
+    const requestOrderB = b.workRequestOrderInWindow ?? 999;
+
+    if (requestOrderA !== requestOrderB) {
+      return requestOrderA - requestOrderB;
     }
 
     return String(wrA.shipName || "").localeCompare(String(wrB.shipName || ""));
@@ -388,7 +431,7 @@ export function groupEntriesByBlock(simulationData) {
       workRequest.shiftCode
     );
 
-    const blockKey = `${formatDateOnly(workRequest.workDate)}-${entry.nominationWindowOrder}-${entry.workRequestOrderInWindow}-${workRequest.shiftCode}`;
+    const blockKey = `${formatDateOnly(workRequest.workDate)}-${entry.nominationWindowOrder}-${workRequest.shiftCode}`;
 
     if (!blockMap.has(blockKey)) {
       blockMap.set(blockKey, {
