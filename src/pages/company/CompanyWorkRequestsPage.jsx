@@ -25,7 +25,43 @@ const SHIFT_OPTIONS = [
   { value: "20_02", label: "20 A 02" },
 ];
 
+const BERTH_OPTIONS = [
+  { id: "M1", code: "M1", name: "Muelle 1", order: 1 },
+  { id: "M2", code: "M2", name: "Muelle 2", order: 2 },
+  { id: "M3", code: "M3", name: "Muelle 3", order: 3 },
+  { id: "M4", code: "M4", name: "Muelle 4", order: 4 },
+  { id: "M5", code: "M5", name: "Muelle 5", order: 5 },
+  { id: "M6", code: "M6", name: "Muelle 6", order: 6 },
+  { id: "M7", code: "M7", name: "Muelle 7", order: 7 },
+  { id: "M8", code: "M8", name: "Muelle 8", order: 8 },
+  { id: "M9_1", code: "M9.1", name: "Muelle 9.1", order: 9.1 },
+  { id: "M9_2", code: "M9.2", name: "Muelle 9.2", order: 9.2 },
+  { id: "M9_3", code: "M9.3", name: "Muelle 9.3", order: 9.3 },
+  { id: "M9_4", code: "M9.4", name: "Muelle 9.4", order: 9.4 },
+];
+
 const QUICK_TEMPLATES = [
+  {
+    id: "CONT_REMOCION",
+    name: "Contenedores - Remocion",
+    taskCode: "CONT",
+    taskName: "Contenedores",
+    requiredPositions: [
+      { positionCode: "JEFE_PARCELA", quantity: 1, notes: "" },
+      { positionCode: "REACH_STACKER", quantity: 3, notes: "" },
+    ],
+  },
+  {
+    id: "CONT_REMOCION_MAFIS",
+    name: "Contenedores - Remocion y mafis",
+    taskCode: "CONT",
+    taskName: "Contenedores",
+    requiredPositions: [
+      { positionCode: "JEFE_PARCELA", quantity: 1, notes: "" },
+      { positionCode: "REACH_STACKER", quantity: 3, notes: "" },
+      { positionCode: "TRAILER", quantity: 2, notes: "" },
+    ],
+  },
   {
     id: "CONT_1",
     name: "Contenedores - 1 mano",
@@ -33,10 +69,10 @@ const QUICK_TEMPLATES = [
     taskName: "Contenedores",
     requiredPositions: [
       { positionCode: "JEFE_PARCELA", quantity: 1, notes: "" },
+      { positionCode: "REACH_STACKER", quantity: 2, notes: "" },
       { positionCode: "CAPATAZ", quantity: 1, notes: "" },
       { positionCode: "ANOTADOR", quantity: 1, notes: "" },
       { positionCode: "GRUA", quantity: 1, notes: "" },
-      { positionCode: "REACH_STACKER", quantity: 2, notes: "" },
       { positionCode: "TRAILER", quantity: 4, notes: "" },
       { positionCode: "BORDO", quantity: 1, notes: "" },
       { positionCode: "TIERRA", quantity: 2, notes: "" },
@@ -50,10 +86,10 @@ const QUICK_TEMPLATES = [
     taskName: "Contenedores",
     requiredPositions: [
       { positionCode: "JEFE_PARCELA", quantity: 1, notes: "" },
+      { positionCode: "REACH_STACKER", quantity: 5, notes: "" },
       { positionCode: "CAPATAZ", quantity: 2, notes: "" },
       { positionCode: "ANOTADOR", quantity: 2, notes: "" },
       { positionCode: "GRUA", quantity: 3, notes: "" },
-      { positionCode: "REACH_STACKER", quantity: 5, notes: "" },
       { positionCode: "TRAILER", quantity: 8, notes: "" },
       { positionCode: "BORDO", quantity: 2, notes: "" },
       { positionCode: "TIERRA", quantity: 4, notes: "" },
@@ -67,14 +103,25 @@ const QUICK_TEMPLATES = [
     taskName: "Contenedores",
     requiredPositions: [
       { positionCode: "JEFE_PARCELA", quantity: 1, notes: "" },
+      { positionCode: "REACH_STACKER", quantity: 8, notes: "" },
       { positionCode: "CAPATAZ", quantity: 3, notes: "" },
       { positionCode: "ANOTADOR", quantity: 3, notes: "" },
       { positionCode: "GRUA", quantity: 5, notes: "" },
-      { positionCode: "REACH_STACKER", quantity: 8, notes: "" },
       { positionCode: "TRAILER", quantity: 12, notes: "" },
       { positionCode: "BORDO", quantity: 3, notes: "" },
       { positionCode: "TIERRA", quantity: 6, notes: "" },
       { positionCode: "TRINCA", quantity: 12, notes: "" },
+    ],
+  },
+    {
+    id: "BARCO_COCHES",
+    name: "BARCO COCHES",
+    taskCode: "BARCO_COCHES",
+    taskName: "Barco Coches",
+    requiredPositions: [
+      { positionCode: "CAPATAZ", quantity: 1, notes: "" },
+      { positionCode: "ANOTADOR", quantity: 1, notes: "" },
+      { positionCode: "CONDUCTORES", quantity: 16, notes: "" },
     ],
   },
   {
@@ -112,6 +159,7 @@ const createEmptyPlanLine = ({
     workDate,
     shiftCode,
     templateId,
+    requiredPositions: cloneTemplatePositions(templateId),
     isChangeable: false,
     observations: "",
   };
@@ -119,9 +167,10 @@ const createEmptyPlanLine = ({
 
 const DEFAULT_FORM = {
   shipName: "",
-  berthCode: "M9",
-  berthName: "Muelle 9",
-  berthOrder: 2,
+  berthId: "M9_1",
+  berthCode: "M9.1",
+  berthName: "Muelle 9.1",
+  berthOrder: 9.1,
   generalObservations: "",
   lines: [
     createEmptyPlanLine({
@@ -164,6 +213,15 @@ function getTemplateById(templateId) {
   );
 }
 
+function cloneTemplatePositions(templateId) {
+  const template = getTemplateById(templateId);
+
+  return template.requiredPositions.map((position) => ({
+    ...position,
+    quantity: Number(position.quantity) || 0,
+  }));
+}
+
 function cloneRequiredPositions(requiredPositions) {
   return (requiredPositions || []).map((position) => ({
     positionCode: position.positionCode,
@@ -204,7 +262,9 @@ function buildRequestPayloadFromLine({ form, line }) {
     keepPreviousWorkersIfPossible: false,
     status: shouldBeChangeable ? "CHANGEABLE" : "SUBMITTED",
     visibleToWorkers: false,
-    requiredPositions: cloneRequiredPositions(template.requiredPositions),
+    requiredPositions: cloneRequiredPositions(
+      line.requiredPositions || template.requiredPositions
+    ).filter((position) => position.quantity > 0),
     observations: observationsParts.join(" | "),
   };
 }
@@ -366,6 +426,19 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
     }));
   }
 
+  function updateSelectedBerth(berthId) {
+    const selectedBerth =
+      BERTH_OPTIONS.find((berth) => berth.id === berthId) || BERTH_OPTIONS[0];
+
+    setForm((currentForm) => ({
+      ...currentForm,
+      berthId: selectedBerth.id,
+      berthCode: selectedBerth.code,
+      berthName: selectedBerth.name,
+      berthOrder: selectedBerth.order,
+    }));
+  }
+
   function updatePlanLine(lineId, changes) {
     setForm((currentForm) => ({
       ...currentForm,
@@ -387,6 +460,33 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
         }
 
         return nextLine;
+      }),
+    }));
+  }
+
+  function updatePlanLinePositionQuantity(lineId, positionCode, quantity) {
+    const safeQuantity = Math.max(0, Number(quantity) || 0);
+
+    setForm((currentForm) => ({
+      ...currentForm,
+      lines: currentForm.lines.map((line) => {
+        if (line.id !== lineId) {
+          return line;
+        }
+
+        return {
+          ...line,
+          requiredPositions: (line.requiredPositions || []).map((position) => {
+            if (position.positionCode !== positionCode) {
+              return position;
+            }
+
+            return {
+              ...position,
+              quantity: safeQuantity,
+            };
+          }),
+        };
       }),
     }));
   }
@@ -624,8 +724,8 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
               </p>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-4">
-              <label className="block md:col-span-2">
+            <div className="grid gap-4 md:grid-cols-3">
+              <label className="block">
                 <span className="mb-2 block text-sm font-bold text-slate-700">
                   Barco
                 </span>
@@ -643,47 +743,23 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
                 <span className="mb-2 block text-sm font-bold text-slate-700">
                   Muelle
                 </span>
-                <input
-                  value={form.berthName}
-                  onChange={(event) =>
-                    updateFormField("berthName", event.target.value)
-                  }
+                <select
+                  value={form.berthId}
+                  onChange={(event) => updateSelectedBerth(event.target.value)}
                   className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900"
-                  placeholder="Muelle 9"
-                />
+                >
+                  {BERTH_OPTIONS.map((berth) => (
+                    <option key={berth.id} value={berth.id}>
+                      {berth.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-2 text-xs font-bold text-slate-400">
+                  Código interno: {form.berthCode} · orden {form.berthOrder}
+                </p>
               </label>
 
               <label className="block">
-                <span className="mb-2 block text-sm font-bold text-slate-700">
-                  Código muelle
-                </span>
-                <input
-                  value={form.berthCode}
-                  onChange={(event) =>
-                    updateFormField("berthCode", event.target.value)
-                  }
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900"
-                  placeholder="M9"
-                />
-              </label>
-            </div>
-
-            <div className="mt-4 grid gap-4 md:grid-cols-4">
-              <label className="block">
-                <span className="mb-2 block text-sm font-bold text-slate-700">
-                  Orden muelle
-                </span>
-                <input
-                  type="number"
-                  value={form.berthOrder}
-                  onChange={(event) =>
-                    updateFormField("berthOrder", event.target.value)
-                  }
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900"
-                />
-              </label>
-
-              <label className="block md:col-span-3">
                 <span className="mb-2 block text-sm font-bold text-slate-700">
                   Observaciones generales
                 </span>
@@ -693,7 +769,7 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
                     updateFormField("generalObservations", event.target.value)
                   }
                   className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900"
-                  placeholder="Observaciones comunes para este barco..."
+                  placeholder="Observaciones comunes..."
                 />
               </label>
             </div>
@@ -790,11 +866,14 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
                           </span>
                           <select
                             value={line.templateId}
-                            onChange={(event) =>
+                            onChange={(event) => {
+                              const nextTemplateId = event.target.value;
+
                               updatePlanLine(line.id, {
-                                templateId: event.target.value,
-                              })
-                            }
+                                templateId: nextTemplateId,
+                                requiredPositions: cloneTemplatePositions(nextTemplateId),
+                              });
+                            }}
                             className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900"
                           >
                             {QUICK_TEMPLATES.map((item) => (
@@ -846,14 +925,30 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
                           Puestos de la plantilla
                         </div>
 
-                        <div className="flex flex-wrap gap-2">
-                          {template.requiredPositions.map((position) => (
-                            <span
+                        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
+                          {(line.requiredPositions || template.requiredPositions).map((position) => (
+                            <label
                               key={position.positionCode}
-                              className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-700 shadow-sm"
+                              className="rounded-2xl bg-white p-3 shadow-sm"
                             >
-                              {position.positionCode}: {position.quantity}
-                            </span>
+                              <span className="mb-2 block text-xs font-black text-slate-600">
+                                {position.positionCode}
+                              </span>
+
+                              <input
+                                type="number"
+                                min="0"
+                                value={position.quantity}
+                                onChange={(event) =>
+                                  updatePlanLinePositionQuantity(
+                                    line.id,
+                                    position.positionCode,
+                                    event.target.value
+                                  )
+                                }
+                                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-bold text-slate-900"
+                              />
+                            </label>
                           ))}
                         </div>
                       </div>
