@@ -2414,6 +2414,10 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
                 <p className="mt-1 text-sm text-slate-500">
                     Borradores y nombramientos publicados generados desde la simulación.
                 </p>
+
+                <p className="mt-2 text-xs font-bold text-slate-400">
+                  Mostrando {nominationRuns.length} nombramiento(s). Desplaza dentro de la ventana para ver más.
+                </p>
             </div>
 
             <button
@@ -2468,7 +2472,7 @@ export default function SavedNominationRunsPanel({ currentUser, refreshKey }) {
           Todavía no hay nombramientos guardados.
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="max-h-[650px] overflow-auto">
           <table className="w-full min-w-[1080px] border-collapse">
             <thead>
               <tr className="bg-slate-50 text-left text-xs font-black uppercase tracking-wide text-slate-500">

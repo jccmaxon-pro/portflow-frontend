@@ -151,7 +151,7 @@ function RequestMiniTable({ title, requests, emptyText }) {
       {requests.length === 0 ? (
         <div className="p-5 text-sm text-slate-500">{emptyText}</div>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="max-h-[360px] overflow-auto">
           <table className="w-full min-w-[900px] border-collapse">
             <thead>
               <tr className="bg-slate-50 text-left text-xs font-black uppercase tracking-wide text-slate-500">
@@ -585,7 +585,12 @@ export default function NominatorWorkRequestsPage({ currentUser }) {
       group.items.push(workRequest);
     }
 
-    return groups;
+    return groups.sort((a, b) => {
+      const dateA = new Date(a.items[0]?.workDate);
+      const dateB = new Date(b.items[0]?.workDate);
+
+      return dateB - dateA;
+    });
   }, [filteredWorkRequests]);
 
   const summary = useMemo(() => {
@@ -1321,6 +1326,9 @@ export default function NominatorWorkRequestsPage({ currentUser }) {
             <h2 className="text-xl font-black text-slate-900">
               Solicitudes recibidas
             </h2>
+            <p className="mt-1 text-sm font-bold text-slate-500">
+              Mostrando {filteredWorkRequests.length} solicitud/es filtradas. Desplaza dentro de la ventana para ver más.
+            </p>
           </div>
 
           {loading ? (
@@ -1332,7 +1340,7 @@ export default function NominatorWorkRequestsPage({ currentUser }) {
               No hay solicitudes con los filtros actuales.
             </div>
           ) : (
-            <div className="space-y-6 p-5">
+            <div className="max-h-[720px] space-y-6 overflow-y-auto p-5">
               {groupedByDate.map((group) => (
                 <div
                   key={group.dateLabel}
