@@ -30,10 +30,16 @@ function getRotationTitle(rotation) {
   return rotation.name || rotation.mainRotationListCode;
 }
 
+function buildIntegratedPreviewRows(rotation) {
+  return rotation.currentWeek?.integratedWorkers || [];
+}
+
 function RotationCard({ rotation, onToggle, onEdit }) {
   const currentCodes = rotation.currentWeek?.substituteWorkerCodes || [];
   const nextCodes = rotation.nextWeek?.substituteWorkerCodes || [];
   const slots = rotation.insertionSlots || [];
+
+  const integratedPreviewRows = buildIntegratedPreviewRows(rotation);
 
   return (
     <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -140,46 +146,122 @@ function RotationCard({ rotation, onToggle, onEdit }) {
         </div>
       </div>
 
-      <div className="mt-5 rounded-2xl border border-slate-200 p-4">
-        <h3 className="text-sm font-black uppercase tracking-wide text-slate-500">
-          Posiciones de inserción
-        </h3>
+      <div className="mt-5 grid gap-4 xl:grid-cols-[1fr_1.2fr]">
+  <div className="rounded-2xl border border-slate-200 p-4">
+    <h3 className="text-sm font-black uppercase tracking-wide text-slate-500">
+      Posiciones de inserción
+    </h3>
 
-        <div className="mt-4 space-y-2">
-          {slots.length === 0 ? (
-            <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm font-bold text-slate-500">
-              No hay posiciones configuradas.
-            </div>
-          ) : (
-            slots
-              .slice()
-              .sort((a, b) => Number(a.slotIndex) - Number(b.slotIndex))
-              .map((slot) => {
-                const weeklyWorker =
-                  currentCodes[Number(slot.slotIndex) - 1] || "—";
+    <div className="mt-4 space-y-2">
+      {slots.length === 0 ? (
+        <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm font-bold text-slate-500">
+          No hay posiciones configuradas.
+        </div>
+      ) : (
+        slots
+          .slice()
+          .sort((a, b) => Number(a.slotIndex) - Number(b.slotIndex))
+          .map((slot) => {
+            const weeklyWorker =
+              currentCodes[Number(slot.slotIndex) - 1] || "—";
 
-                return (
+            return (
+              <div
+                key={slot.slotIndex}
+                className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-4 py-3"
+              >
+                <div>
+                  <div className="text-xs font-bold uppercase text-slate-400">
+                    Después de
+                  </div>
+                  <div className="text-sm font-black text-slate-800">
+                    {slot.insertAfterWorkerCode}
+                  </div>
+                </div>
+
+                <div className="text-xl font-black text-slate-300">→</div>
+
+                <div className="text-right">
+                  <div className="text-xs font-bold uppercase text-slate-400">
+                    Entra
+                  </div>
+                  <div className="inline-flex rounded-full bg-blue-100 px-4 py-2 text-sm font-black text-blue-800">
+                    {weeklyWorker}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+      )}
+    </div>
+  </div>
+
+  <div className="rounded-2xl border border-slate-200 p-4">
+    <h3 className="text-sm font-black uppercase tracking-wide text-slate-500">
+      Vista integrada de esta semana
+    </h3>
+
+    <p className="mt-1 text-xs font-bold text-slate-400">
+      Muestra dónde quedan colocados los suplentes dentro de la lista principal.
+    </p>
+
+    <div className="mt-4 max-h-80 overflow-y-auto rounded-2xl bg-slate-50 p-3">
+      {integratedPreviewRows.length === 0 ? (
+        <div className="px-4 py-3 text-sm font-bold text-slate-500">
+          No hay vista integrada disponible.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {integratedPreviewRows.map((worker, index) => (
+            <div
+              key={`${worker.workerCode}-${index}`}
+              className={`flex items-center justify-between rounded-xl px-4 py-3 ${
+                worker.isWeeklyIntegrated
+                  ? "border border-blue-200 bg-blue-50"
+                  : "bg-white"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 text-right text-xs font-black text-slate-400">
+                  {index + 1}
+                </div>
+
+                <div>
                   <div
-                    key={slot.slotIndex}
-                    className="flex items-center justify-center gap-4 rounded-xl bg-slate-50 px-4 py-3"
+                    className={`text-sm font-black ${
+                      worker.isWeeklyIntegrated ? "text-blue-900" : "text-slate-800"
+                    }`}
                   >
-                    <span className="w-28 text-right text-sm font-black text-slate-700">
-                      después de {slot.insertAfterWorkerCode}
-                    </span>
-
-                    <span className="rounded-full bg-blue-100 px-4 py-2 text-sm font-black text-blue-800">
-                      {weeklyWorker}
-                    </span>
-
-                    <span className="w-32 text-sm font-bold text-slate-500">
-                      suplente {slot.slotIndex}
+                    {worker.workerCode}{" "}
+                    <span className="font-bold">
+                      {worker.fullName ? `- ${worker.fullName}` : ""}
                     </span>
                   </div>
-                );
-              })
-          )}
+
+                  <div
+                    className={`text-xs font-bold ${
+                      worker.isWeeklyIntegrated ? "text-blue-600" : "text-slate-400"
+                    }`}
+                  >
+                    {worker.isWeeklyIntegrated
+                      ? `Suplente semanal integrado después de ${worker.insertedAfterWorkerCode}`
+                      : "Titular lista principal"}
+                  </div>
+                </div>
+              </div>
+
+              {worker.isWeeklyIntegrated && (
+                <div className="rounded-full bg-blue-600 px-3 py-1 text-xs font-black uppercase tracking-wide text-white">
+                  Integrado
+                </div>
+              )}
+            </div>
+          ))}
         </div>
-      </div>
+      )}
+    </div>
+  </div>
+</div>
 
       <div className="mt-4 text-xs font-bold text-slate-400">
         Cambio semanal: {rotation.weeklyStartDay} · Suplentes por semana:{" "}
