@@ -925,13 +925,13 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
                           Puestos de la plantilla
                         </div>
 
-                        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
+                        <div className="mx-auto max-w-xl space-y-2">
                           {(line.requiredPositions || template.requiredPositions).map((position) => (
                             <label
                               key={position.positionCode}
-                              className="rounded-2xl bg-white p-3 shadow-sm"
+                              className="flex items-center justify-center gap-6 rounded-xl bg-white px-4 py-2 shadow-sm"
                             >
-                              <span className="mb-2 block text-xs font-black text-slate-600">
+                              <span className="w-40 text-right text-sm font-black text-slate-700">
                                 {position.positionCode}
                               </span>
 
@@ -946,7 +946,7 @@ export default function CompanyWorkRequestsPage({ currentUser }) {
                                     event.target.value
                                   )
                                 }
-                                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-bold text-slate-900"
+                                className="w-20 rounded-lg border border-slate-300 px-2 py-1 text-center text-sm font-black text-slate-900"
                               />
                             </label>
                           ))}
