@@ -5,6 +5,7 @@ import WorkersPage from "./pages/WorkersPage";
 import CompanyWorkRequestsPage from "./pages/company/CompanyWorkRequestsPage";
 import WorkerRestPage from "./pages/worker/WorkerRestPage";
 import NominatorWorkerRestsPage from "./pages/nominator/NominatorWorkerRestsPage";
+import WeeklyIntegratedRotationsPage from "./pages/nominator/WeeklyIntegratedRotationsPage";
 import WorkerPortalPage from "./pages/worker/WorkerPortalPage";
 import WorkerDoublePage from "./pages/worker/WorkerDoublePage";
 import {
@@ -77,8 +78,8 @@ function buildMenuForUser(user) {
         label: "Descansos",
       },
       {
-        key: "companies",
-        label: "Empresas",
+        key: "weeklySubstitutes",
+        label: "Suplentes",
       },
     ];
   }
@@ -385,8 +386,8 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-100">
       <nav className="border-b border-slate-200 bg-white px-6 py-4 shadow-sm">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
-          <div>
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-5">
+          <div className="w-56 shrink-0">
             <div className="text-xl font-black tracking-tight text-slate-950">
               PORTFLOW
             </div>
@@ -395,13 +396,13 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-1 items-center justify-center gap-2 overflow-x-auto">
             {menuItems.map((item) => (
               <button
                 key={item.key}
                 type="button"
                 onClick={() => setCurrentPage(item.key)}
-                className={`rounded-xl px-4 py-2 text-sm font-bold ${
+                className={`shrink-0 rounded-xl px-3 py-2 text-sm font-bold ${
                   currentPage === item.key
                     ? "bg-slate-900 text-white"
                     : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -412,7 +413,7 @@ export default function App() {
             ))}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex w-64 shrink-0 items-center justify-end gap-3">
             <div className="text-right">
               <div className="text-sm font-black text-slate-900">
                 {getUserDisplayName(currentUser)}
@@ -454,6 +455,10 @@ export default function App() {
       {currentPage === "workerRests" && (
         <NominatorWorkerRestsPage currentUser={currentUser} />
       )}
+
+      {currentPage === "weeklySubstitutes" && (
+        <WeeklyIntegratedRotationsPage currentUser={currentUser} />
+    )}
 
       {currentPage === "companies" && (
         <PlaceholderPage
