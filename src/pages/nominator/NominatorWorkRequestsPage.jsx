@@ -515,6 +515,8 @@ export default function NominatorWorkRequestsPage({ currentUser }) {
   const [savingDraft, setSavingDraft] = useState(false);
   const [savedDraftRun, setSavedDraftRun] = useState(null);
   const [savedRunsRefreshKey, setSavedRunsRefreshKey] = useState(0);
+  const [ignorePreviousOperationalSnapshot, setIgnorePreviousOperationalSnapshot] =
+    useState(false);
 
   const [rejectingRequest, setRejectingRequest] = useState(null);
   const [rejectionReason, setRejectionReason] = useState("");
@@ -733,11 +735,16 @@ export default function NominatorWorkRequestsPage({ currentUser }) {
         blockItems,
         doorStartByRotationList: {},
         simulationOptions: {
-          source: "NOMINATION_PREVIEW",
-          windowCode: previewData.windowCode,
-          windowName: previewData.windowName,
-          allowedWorkRequestStatuses: ["CONFIRMED", "CHANGEABLE"],
-        },
+        source: "NOMINATION_PREVIEW",
+        windowCode: previewData.windowCode,
+        windowName: previewData.windowName,
+        allowedWorkRequestStatuses: ["CONFIRMED", "CHANGEABLE"],
+
+        // MODO PRUEBA:
+        // true = ignora snapshots anteriores y arranca limpio.
+        // false = comportamiento normal.
+        ignorePreviousOperationalSnapshot,
+      },
       });
 
       if (!result.success) {
@@ -1182,6 +1189,25 @@ export default function NominatorWorkRequestsPage({ currentUser }) {
                       Se usará solo el trabajo incluido arriba: solicitudes CONFIRMED y
                       CHANGEABLE de esta ventana.
                     </p>
+                    <label className="mt-3 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                      <input
+                        type="checkbox"
+                        checked={ignorePreviousOperationalSnapshot}
+                        onChange={(event) =>
+                          setIgnorePreviousOperationalSnapshot(event.target.checked)
+                        }
+                        className="mt-1 h-5 w-5"
+                      />
+
+                      <div>
+                        <div className="text-sm font-black text-amber-900">
+                          Simulación limpia
+                        </div>
+                        <p className="mt-1 text-sm font-bold text-amber-800">
+                          Ignora snapshots anteriores. Úsalo solo para pruebas o para arrancar desde cero.
+                        </p>
+                      </div>
+                    </label>
                   </div>
 
                   <button
