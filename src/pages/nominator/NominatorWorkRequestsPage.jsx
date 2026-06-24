@@ -62,6 +62,41 @@ const NOMINATION_WINDOWS = [
 
 const DEFAULT_PREVIEW_PORT_ID = "69f210fe5417a1641d23188d";
 
+const CONTROLLERS_NOMINATION_MODES = {
+  NATURAL: "NATURAL",
+  MALAGA_CONTROLLERS_NIGHT_PRIORITY: "MALAGA_CONTROLLERS_NIGHT_PRIORITY",
+  WEEKLY_INTEGRATED_ROTATION: "WEEKLY_INTEGRATED_ROTATION",
+};
+
+const CONTROLLERS_NOMINATION_MODE_OPTIONS = [
+  {
+    value: CONTROLLERS_NOMINATION_MODES.NATURAL,
+    label: "Natural",
+    description:
+      "Titulares por orden normal. Suplentes solo si faltan titulares. No reserva controladores para la noche.",
+  },
+  {
+    value: CONTROLLERS_NOMINATION_MODES.MALAGA_CONTROLLERS_NIGHT_PRIORITY,
+    label: "Especial Málaga actual",
+    description:
+      "Reserva titulares para 20_02 si hay trabajo de noche y prioriza dobles de titulares antes que suplentes.",
+  },
+  {
+    value: CONTROLLERS_NOMINATION_MODES.WEEKLY_INTEGRATED_ROTATION,
+    label: "Rotación semanal integrada",
+    description:
+      "Modo futuro: suplentes integrados semanalmente como titulares. Todavía no activar en producción.",
+  },
+];
+
+const getControllersNominationModeDescription = (mode) => {
+  return (
+    CONTROLLERS_NOMINATION_MODE_OPTIONS.find((option) => {
+      return option.value === mode;
+    })?.description || ""
+  );
+};
+
 function formatDate(dateValue) {
   if (!dateValue) {
     return "-";
@@ -518,6 +553,10 @@ export default function NominatorWorkRequestsPage({ currentUser }) {
   const [ignorePreviousOperationalSnapshot, setIgnorePreviousOperationalSnapshot] =
     useState(false);
 
+  const [controllersNominationMode, setControllersNominationMode] = useState(
+    CONTROLLERS_NOMINATION_MODES.NATURAL
+  );
+
   const [rejectingRequest, setRejectingRequest] = useState(null);
   const [rejectionReason, setRejectionReason] = useState("");
 
@@ -735,16 +774,20 @@ export default function NominatorWorkRequestsPage({ currentUser }) {
         blockItems,
         doorStartByRotationList: {},
         simulationOptions: {
-        source: "NOMINATION_PREVIEW",
-        windowCode: previewData.windowCode,
-        windowName: previewData.windowName,
-        allowedWorkRequestStatuses: ["CONFIRMED", "CHANGEABLE"],
+          source: "NOMINATION_PREVIEW",
+          windowCode: previewData.windowCode,
+          windowName: previewData.windowName,
+          allowedWorkRequestStatuses: ["CONFIRMED", "CHANGEABLE"],
 
-        // MODO PRUEBA:
-        // true = ignora snapshots anteriores y arranca limpio.
-        // false = comportamiento normal.
-        ignorePreviousOperationalSnapshot,
-      },
+          specialNominationStrategies: {
+            CONTROLADORES: controllersNominationMode,
+          },
+
+          // MODO PRUEBA:
+          // true = ignora snapshots anteriores y arranca limpio.
+          // false = comportamiento normal.
+          ignorePreviousOperationalSnapshot,
+        },
       });
 
       if (!result.success) {
@@ -1208,6 +1251,38 @@ export default function NominatorWorkRequestsPage({ currentUser }) {
                         </p>
                       </div>
                     </label>
+                    <div className="mt-3 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                      <label className="block">
+                        <span className="mb-2 block text-sm font-black text-blue-900">
+                          Modo de controladores
+                        </span>
+
+                        <select
+                          value={controllersNominationMode}
+                          onChange={(event) =>
+                            setControllersNominationMode(event.target.value)
+                          }
+                          className="w-full rounded-2xl border border-blue-300 bg-white px-4 py-3 text-sm font-bold text-slate-900"
+                        >
+                          {CONTROLLERS_NOMINATION_MODE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <p className="mt-2 text-sm font-bold text-blue-800">
+                        {getControllersNominationModeDescription(controllersNominationMode)}
+                      </p>
+
+                      {controllersNominationMode ===
+                        CONTROLLERS_NOMINATION_MODES.WEEKLY_INTEGRATED_ROTATION && (
+                        <p className="mt-2 rounded-xl bg-amber-100 px-3 py-2 text-sm font-black text-amber-900">
+                          Este modo está preparado para futuro, pero todavía no debe usarse para nombramiento real.
+                        </p>
+                      )}
+                    </div>
                   </div>
 
                   <button
