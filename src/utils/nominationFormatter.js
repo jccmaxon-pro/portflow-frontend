@@ -31,6 +31,24 @@ export const SHIFT_ORDER = {
   "20_02": 60,
 };
 
+export const SHIFT_START_ORDER = {
+  "24_06": 0,
+  "02_08": 2,
+
+  // Ambos empiezan a las 08:00.
+  // Para la vista del nombramiento corrido deben competir por muelle.
+  "08_14": 8,
+  "08_18": 8,
+
+  "14_20": 14,
+  "18_24": 18,
+  "20_02": 20,
+};
+
+function getShiftStartSortValue(shiftCode) {
+  return SHIFT_START_ORDER[shiftCode] ?? 999;
+}
+
 function getBerthSortValue(workRequest) {
   const berth = workRequest?.berth || {};
 
@@ -54,7 +72,7 @@ function getBerthSortValue(workRequest) {
   // 3) Si viene nombre tipo "Muelle 5", "Muelle 9", etc.
   const nameText = String(berth.name || "").toUpperCase();
   const nameMatch = nameText.match(/\d+/);
-
+ 
   if (nameMatch) {
     return Number(nameMatch[0]);
   }
@@ -238,22 +256,37 @@ export function sortWorkRequests(entries) {
       return windowOrderA - windowOrderB;
     }
 
-    // Primero respetamos el turno operativo.
-    // Ejemplo: 08_18 antes que 08_14 si así lo define SHIFT_ORDER.
-    const shiftOrderA = SHIFT_ORDER[wrA.shiftCode] ?? 999;
-    const shiftOrderB = SHIFT_ORDER[wrB.shiftCode] ?? 999;
+    /**
+     * Orden visual de nombramiento:
+     * - Primero los trabajos que empiezan a las 02:00.
+     * - Después los trabajos que empiezan a las 08:00.
+     * - 08_14 y 08_18 empatan porque ambos arrancan a las 08:00.
+     * - Dentro del mismo arranque horario manda el muelle.
+     */
+    const shiftStartOrderA = getShiftStartSortValue(wrA.shiftCode);
+    const shiftStartOrderB = getShiftStartSortValue(wrB.shiftCode);
 
-    if (shiftOrderA !== shiftOrderB) {
-      return shiftOrderA - shiftOrderB;
+    if (shiftStartOrderA !== shiftStartOrderB) {
+      return shiftStartOrderA - shiftStartOrderB;
     }
 
-    // Dentro del mismo turno, muelle más bajo primero:
-    // M5 antes que M6, M6 antes que M7, M7 antes que M9.
+    // Dentro del mismo arranque horario, muelle más bajo primero.
     const berthOrderA = getBerthSortValue(wrA);
     const berthOrderB = getBerthSortValue(wrB);
 
     if (berthOrderA !== berthOrderB) {
       return berthOrderA - berthOrderB;
+    }
+
+    /**
+     * Desempate: si coinciden hora de arranque y muelle,
+     * usamos el orden operativo del turno.
+     */
+    const shiftOrderA = SHIFT_ORDER[wrA.shiftCode] ?? 999;
+    const shiftOrderB = SHIFT_ORDER[wrB.shiftCode] ?? 999;
+
+    if (shiftOrderA !== shiftOrderB) {
+      return shiftOrderA - shiftOrderB;
     }
 
     // Si coinciden turno y muelle, mantenemos el orden operativo que venga del backend.
@@ -431,7 +464,24 @@ export function groupEntriesByBlock(simulationData) {
       workRequest.shiftCode
     );
 
-    const blockKey = `${formatDateOnly(workRequest.workDate)}-${entry.nominationWindowOrder}-${workRequest.shiftCode}`;
+    /**
+     * Importante:
+     * No agrupamos solo por shiftCode porque en ventanas corridas
+     * 08_14 y 08_18 deben poder intercalarse por muelle.
+     *
+     * Ejemplo correcto:
+     * 08_14 Muelle 6
+     * 08_18 Muelle 7
+     * 08_14 Muelle 9.1
+     */
+    const blockKey = [
+      formatDateOnly(workRequest.workDate),
+      entry.nominationWindowOrder,
+      getShiftStartSortValue(workRequest.shiftCode),
+      getBerthSortValue(workRequest),
+      workRequest.shiftCode,
+      workRequest._id,
+    ].join("-");
 
     if (!blockMap.has(blockKey)) {
       blockMap.set(blockKey, {
